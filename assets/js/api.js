@@ -34,9 +34,11 @@ export async function call(action, args = {}, { timeout = 90000 } = {}) {
    Offline preview backend (?mock) — mirrors the Apps Script API
    ------------------------------------------------------------------ */
 const MOCK_CONFIG = {
-  rulesReady: false, rules: [], lockShares: false, demo: true, defaultTotal: 50, maxPerLecture: 120, maxTotal: 600, maxLectureChars: 600000,
-  types: [{ id: 'mcq', label: 'اختيار من متعدد', en: 'MCQ', options: 4, share: 60 }, { id: 'tf', label: 'صح وخطأ', en: 'True / False', options: 2, share: 20 }, { id: 'case', label: 'حالة إكلينيكية', en: 'Case-based MCQ', options: 4, share: 20 }],
-  levels: [{ id: 'easy', label: 'سهل', en: 'Easy', share: 30 }, { id: 'medium', label: 'متوسط', en: 'Medium', share: 50 }, { id: 'hard', label: 'صعب', en: 'Hard', share: 20 }]
+  version: 3, rulesReady: true, lockShares: false, demo: true, bankSizes: [200, 400], defaultTotal: 200, maxPerLecture: 200, maxTotal: 600, maxLectureChars: 600000,
+  rules: [{ title: 'لغة بسيطة', detail: 'إنجليزي سهل وجمل قصيرة، بنفس مصطلحات المحاضرة' }, { title: 'مش منقول حرفياً', detail: 'صياغة وزاوية بعيدة عن الأسئلة المتوقعة من أي AI' }, { title: '4 اختيارات وإجابة واحدة', detail: 'من نفس النوع وبنفس الطول، والصح متوزّع على A–D' }],
+  types: [{ id: 'mcq', label: 'اختيار من متعدد', en: 'MCQ', options: 4, share: 75 }, { id: 'tf', label: 'صح وخطأ', en: 'True / False', options: 2, share: 20 }, { id: 'case', label: 'حالة إكلينيكية', en: 'Case-based MCQ', options: 4, share: 5 }],
+  levels: [{ id: 'easy', label: 'سهل', en: 'Easy', share: 60 }, { id: 'medium', label: 'متوسط', en: 'Medium', share: 30 }, { id: 'hard', label: 'صعب', en: 'Hard', share: 10 }],
+  blooms: [{ id: 'recall', label: 'تذكّر', en: 'Recall', share: 70 }, { id: 'understand', label: 'فهم', en: 'Understanding', share: 20 }, { id: 'apply', label: 'تطبيق', en: 'Application', share: 10 }]
 };
 const MOCK_APP = { name: 'بنوك الأسئلة', title: 'بنوك الأسئلة', department: 'تكنولوجيا الطوارئ والرعاية الحرجة', departmentEn: 'Emergency & Critical Care Technology', faculty: 'كلية تكنولوجيا العلوم الصحية التطبيقية', university: 'جامعة الدلتا للعلوم والتكنولوجيا', term: 'خريف 2026–2027', termEn: 'Fall 2026–2027', rev: 2, preview: true };
 const KEY = 'qb_mock_v2';
@@ -98,7 +100,7 @@ function mock(action, a) {
         const u = authed(), cat = CATALOG.find(x => x.code === String(a.code || '').toUpperCase());
         if (!cat) fail('input', 'اختار المادة من القائمة');
         if (d.courses.some(x => x.code === cat.code && x.id !== a.id)) fail('dup', 'المادة ' + cat.code + ' موجودة بالفعل');
-        const rec = { code: cat.code, name: cat.name, level: String(cat.level), target: Math.max(0, Math.round(+a.target || 0)), updatedBy: u.name, updatedAt: Date.now() };
+        const rec = { code: cat.code, name: cat.name, level: String(cat.level), target: [200, 400].includes(+a.target) ? +a.target : 200, updatedBy: u.name, updatedAt: Date.now() };
         let c = d.courses.find(x => x.id === a.id);
         if (c) Object.assign(c, rec); else { c = Object.assign({ id: id('c_'), createdBy: u.name, createdAt: Date.now(), savedBy: '', savedAt: 0 }, rec); d.courses.push(c); }
         persist(); return pubCourse(c);
@@ -142,14 +144,15 @@ export function demoQuestions(l, text, spec, cfg) {
   let lines = String(text).split(/\n+/).map(s => s.replace(/^\s*[-•▪◦*]\s{0,}/, '').replace(/\s+/g, ' ').trim())
     .filter(s => { const w = s.split(' ').length; return w >= 4 && w <= 30 && !/^\[(slide|page)/i.test(s); });
   if (!lines.length) lines = ['this lecture'];
-  const typeSeq = [], levelSeq = [];
+  const typeSeq = [], levelSeq = [], bloomSeq = [];
+  (cfg.blooms || []).forEach(t => { for (let i = 0; i < ((spec.blooms || {})[t.id] || 0); i++) bloomSeq.push(t.id); });
   cfg.types.forEach(t => { for (let i = 0; i < (spec.types[t.id] || 0); i++) typeSeq.push(t.id); });
   cfg.levels.forEach(t => { for (let i = 0; i < (spec.levels[t.id] || 0); i++) levelSeq.push(t.id); });
   const out = [];
   for (let i = 0; i < spec.count; i++) {
     const type = typeSeq[i] || 'mcq', src = lines[(i * 7 + (spec.offset || 0)) % lines.length];
     const w = src.split(' '), ex = w.slice(0, 12).join(' ') + (w.length > 12 ? '…' : '');
-    const q = { id: id('q_'), lectureId: l.id, type, difficulty: levelSeq[(i * 5) % (levelSeq.length || 1)] || 'medium', status: 'draft', source: 'demo', explanation: 'Sample explanation — the real rationale is written once the unified conditions are set.' };
+    const q = { id: id('q_'), lectureId: l.id, type, difficulty: levelSeq[(i * 5) % (levelSeq.length || 1)] || 'medium', bloom: type === 'case' ? 'apply' : (bloomSeq[i] || 'recall'), status: 'draft', source: 'demo', explanation: 'Sample explanation — the real rationale is written once the unified conditions are set.' };
     if (type === 'tf') { q.stem = `Sample statement (demo) based on: “${ex}”`; q.options = ['True', 'False']; q.answer = i % 2; }
     else if (type === 'case') { q.stem = `Sample case (demo): A patient presents in the emergency department… Based on “${ex}”, what is the most appropriate next step?`; q.options = ['Option A (sample)', 'Option B (sample)', 'Option C (sample)', 'Option D (sample)']; q.answer = i % 4; }
     else { q.stem = `Sample question (demo) about: “${ex}” — which of the following is correct?`; q.options = ['Option A (sample)', 'Option B (sample)', 'Option C (sample)', 'Option D (sample)']; q.answer = (i + 1) % 4; }

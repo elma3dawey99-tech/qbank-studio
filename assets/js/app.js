@@ -15,7 +15,7 @@ const S = {
   view: 'boot', user: null, app: null, config: null, authTab: 'login', authErr: '', busy: false,
   courses: [], course: null, lectures: [], bank: [], dirty: false, step: 1,
   plan: null, gen: null, queue: [], textCache: {}, includeNotes: true,
-  filters: { lec: '', type: '', diff: '', status: '', q: '' }, shown: PAGE, editing: null,
+  filters: EMPTY_FILTERS(), shown: PAGE, editing: null,
   exp: { mode: 'key', approvedOnly: false }, homeQ: '', homeLv: 0, menu: false
 };
 window.QB = { S };
@@ -26,6 +26,9 @@ const firstName = n => String(n || '').split(' ')[0];
 const initials = n => String(n || '').split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join(' ');
 function cfgType(id) { return S.config.types.find(t => t.id === id) || { id, label: id, en: id, options: 4 }; }
 function cfgLevel(id) { return S.config.levels.find(t => t.id === id) || { id, label: id, en: id }; }
+function cfgBloom(id) { return (S.config.blooms || []).find(t => t.id === id) || { id, label: id || '—', en: id || '' }; }
+const MIX = ['types', 'levels', 'blooms'];
+function EMPTY_FILTERS() { return { lec: '', type: '', diff: '', bl: '', status: '', q: '' }; }
 function lecById(id) { return S.lectures.find(l => l.id === id); }
 function lecName(id) { const l = lecById(id); return l ? `محاضرة ${l.num}: ${l.title}` : 'محاضرة محذوفة'; }
 const lvName = n => ({ 2: 'المستوى الثاني', 3: 'المستوى الثالث', 4: 'المستوى الرابع' }[n] || 'المستوى ' + n);
@@ -241,6 +244,8 @@ async function courseForm(c) {
   const isNew = !c;
   const taken = new Set(S.courses.filter(x => !c || x.id !== c.id).map(x => x.code));
   let lv = c ? +c.level : (store('qb_lv') || 2), sel = c ? c.code : '';
+  const sizes = S.config.bankSizes || [200, 400];
+  let size = c && sizes.includes(+c.target) ? +c.target : sizes[0];
   if (!LEVELS.includes(lv)) lv = 2;
   const list = () => {
     const items = CATALOG.filter(x => x.level === lv);
@@ -253,7 +258,7 @@ async function courseForm(c) {
     <div class="field"><span class="lbl">المادة</span><div class="course-opts" data-opts>${list()}</div></div>
     <div class="form-grid">
       <div class="field"><span class="lbl">القسم</span><div class="dept-chip">${ic('building')}<span>${esc(BRAND.department)}</span></div></div>
-      <label class="field"><span>العدد المستهدف للبنك (اختياري)</span><input class="input" name="target" type="number" min="0" value="${esc(c && c.target ? c.target : '')}" placeholder="مثال: 200"></label>
+      <div class="field"><span class="lbl">حجم البنك</span><div class="seg size-seg">${sizes.map(n => `<button type="button" data-size="${n}" class="${n === size ? 'on' : ''}">${n} سؤال</button>`).join('')}</div><small>200 سؤال لكل ساعة معتمدة</small></div>
     </div>
     <p class="form-err" data-err hidden></p>
   </div>`;
@@ -264,7 +269,7 @@ async function courseForm(c) {
     label: isNew ? 'إضافة المادة' : 'حفظ', kind: 'primary', icon: isNew ? 'plus' : 'check', validate: async ov => {
       if (!sel) { modalErr(ov, 'اختار المادة من القائمة'); return false; }
       try {
-        const saved = await api('saveCourse', { id: c && c.id, code: sel, target: ov.querySelector('[name=target]').value });
+        const saved = await api('saveCourse', { id: c && c.id, code: sel, target: size });
         store('qb_lv', byCode(sel).level);
         return saved;
       } catch (e) { modalErr(ov, e.message); return false; }
@@ -275,6 +280,8 @@ async function courseForm(c) {
       ov.addEventListener('click', e => {
         const lb = e.target.closest('.lv-seg button');
         if (lb) { lv = +lb.dataset.lv; ov.querySelectorAll('.lv-seg button').forEach(b => b.classList.toggle('on', b === lb)); ov.querySelector('[data-opts]').innerHTML = list(); return; }
+        const sb = e.target.closest('[data-size]');
+        if (sb) { size = +sb.dataset.size; ov.querySelectorAll('[data-size]').forEach(b => b.classList.toggle('on', b === sb)); return; }
         const ob = e.target.closest('.copt');
         if (ob && !ob.disabled) { sel = ob.dataset.code; ov.querySelectorAll('.copt').forEach(b => b.classList.toggle('on', b === ob)); const er = ov.querySelector('[data-err]'); if (er) er.hidden = true; }
       });
@@ -402,16 +409,12 @@ function refreshQueue() { const e = $('#queue'); if (e) e.innerHTML = queueHtml(
 /* step 2 — numbers */
 function planKey() { return 'qb_plan_' + S.course.id; }
 function planInit() {
-  const cfg = S.config;
-  const p = Object.assign({
-    total: S.course.target > 0 ? Math.min(S.course.target, cfg.maxTotal) : cfg.defaultTotal,
-    mode: 'auto', inc: {}, manual: {},
-    types: Object.fromEntries(cfg.types.map(t => [t.id, t.share])),
-    levels: Object.fromEntries(cfg.levels.map(t => [t.id, t.share]))
-  }, store(planKey()) || {});
-  if (cfg.lockShares) { p.types = Object.fromEntries(cfg.types.map(t => [t.id, t.share])); p.levels = Object.fromEntries(cfg.levels.map(t => [t.id, t.share])); }
-  cfg.types.forEach(t => { if (p.types[t.id] == null) p.types[t.id] = 0; });
-  cfg.levels.forEach(t => { if (p.levels[t.id] == null) p.levels[t.id] = 0; });
+  const cfg = S.config, defs = k => Object.fromEntries((cfg[k] || []).map(t => [t.id, t.share]));
+  const saved = store(planKey()) || {}, target = S.course.target > 0 ? Math.min(S.course.target, cfg.maxTotal) : cfg.defaultTotal;
+  if (saved.v !== cfg.version) MIX.forEach(k => delete saved[k]);
+  if (saved.target !== target) delete saved.total;
+  const p = Object.assign({ total: target, mode: 'auto', inc: {}, manual: {} }, saved, { v: cfg.version, target });
+  MIX.forEach(k => { if (!p[k] || cfg.lockShares) p[k] = defs(k); (cfg[k] || []).forEach(t => { if (p[k][t.id] == null) p[k][t.id] = 0; }); });
   S.plan = p;
 }
 function planSave() { store(planKey(), S.plan); }
@@ -426,14 +429,17 @@ function planCounts() {
   }
   return { per, sum: Object.values(per).reduce((a, b) => a + b, 0), lecs };
 }
+function lecturePools(lecs, per) {
+  const sum = lecs.reduce((a, l) => a + (per[l.id] || 0), 0), out = {};
+  const global = Object.fromEntries(MIX.map(k => [k, splitShares(sum, S.plan[k], S.config[k])]));
+  lecs.forEach(l => { out[l.id] = Object.fromEntries(MIX.map(k => [k, takeMix(global[k], per[l.id] || 0, S.config[k])])); });
+  return out;
+}
 function planTotals() {
-  const { per, sum, lecs } = planCounts(), types = {}, levels = {};
-  S.config.types.forEach(t => types[t.id] = 0); S.config.levels.forEach(t => levels[t.id] = 0);
-  lecs.forEach(l => {
-    const ts = splitShares(per[l.id], S.plan.types, S.config.types), ls = splitShares(per[l.id], S.plan.levels, S.config.levels);
-    for (const k in ts) types[k] += ts[k]; for (const k in ls) levels[k] += ls[k];
-  });
-  return { per, sum, lecs, types, levels };
+  const { per, sum, lecs } = planCounts(), out = { per, sum, lecs }, pools = lecturePools(lecs, per);
+  MIX.forEach(k => { out[k] = {}; S.config[k].forEach(t => out[k][t.id] = 0); });
+  lecs.forEach(l => MIX.forEach(k => { for (const id in pools[l.id][k]) out[k][id] += pools[l.id][k][id]; }));
+  return out;
 }
 function planProblems() {
   const t = planTotals(), errs = [];
@@ -442,6 +448,7 @@ function planProblems() {
   if (S.plan.mode === 'manual' && t.sum !== S.plan.total) errs.push(`مجموع الأسئلة على المحاضرات ${t.sum} لازم يساوي ${S.plan.total}`);
   if (sharesSum(S.plan.types) !== 100) errs.push('نسب أنواع الأسئلة لازم مجموعها 100%');
   if (sharesSum(S.plan.levels) !== 100) errs.push('نسب مستويات الصعوبة لازم مجموعها 100%');
+  if (sharesSum(S.plan.blooms) !== 100) errs.push('نسب مستويات التفكير لازم مجموعها 100%');
   if (S.plan.total < 1) errs.push('حدد عدد الأسئلة');
   if (t.lecs.some(l => t.per[l.id] > S.config.maxPerLecture)) errs.push(`أقصى عدد للمحاضرة الواحدة ${S.config.maxPerLecture} سؤال`);
   return errs;
@@ -457,7 +464,7 @@ function step2() {
           <div class="card-pad"><div class="total-row">
             <div class="stepper"><button data-act="total" data-d="1" aria-label="زيادة">${ic('plus')}</button><input id="total" type="number" min="1" max="${cfg.maxTotal}" value="${p.total}" data-bind="total" aria-label="عدد الأسئلة"><button data-act="total" data-d="-1" aria-label="نقص">${ic('minus')}</button></div>
             <span class="muted">سؤال للمادة كلها</span><span class="spacer"></span>
-            <div class="presets">${[20, 50, 100, 200].map(n => `<button class="btn sm ${p.total === n ? 'primary' : ''}" data-act="preset" data-n="${n}">${n}</button>`).join('')}</div>
+            <div class="presets">${cfg.bankSizes.map(n => `<button class="btn sm ${p.total === n ? 'primary' : ''}" data-act="preset" data-n="${n}">${n}</button>`).join('')}</div>
           </div></div>
           <div class="card-h" style="border-top:1px solid var(--line)"><h2 style="font-size:15px">التوزيع على المحاضرات</h2><span class="spacer"></span>
             <div class="seg" role="tablist">${[['auto', 'حسب حجم المحاضرة'], ['equal', 'بالتساوي'], ['manual', 'يدوي']].map(([k, t]) => `<button class="${p.mode === k ? 'on' : ''}" data-act="mode" data-mode="${k}">${t}</button>`).join('')}</div></div>
@@ -465,6 +472,7 @@ function step2() {
         </div>
         <div class="card"><div class="card-h"><h2>أنواع الأسئلة</h2>${lock}</div><div id="mix-types">${mixHtml('types')}</div></div>
         <div class="card"><div class="card-h"><h2>مستوى الصعوبة</h2>${lock}</div><div id="mix-levels">${mixHtml('levels')}</div></div>
+        <div class="card"><div class="card-h"><h2>مستوى التفكير</h2><span class="muted" style="font-size:12.5px">الحالات دايماً تطبيق</span>${lock}</div><div id="mix-blooms">${mixHtml('blooms')}</div></div>
         <div class="card gen-cta" id="gen-cta">${genCta()}</div>
       </div>
       <aside class="card rules">${rulesHtml()}</aside>
@@ -518,14 +526,16 @@ function rulesHtml() {
     <div class="skel"><i style="width:92%"></i><i style="width:76%"></i><i style="width:84%"></i><i style="width:60%"></i></div>
     <p style="font-size:13px">لحد ما تتضاف، التوليد بيطلع أسئلة <b>تجريبية</b> عشان تشوف شكل الأداة بس.</p>`;
   return `<span class="r-ico">${ic('check-circle', 'lg')}</span><h3>الشروط الموحدة</h3><p>بتتطبق تلقائياً على كل سؤال، في كل المواد.</p>
-    <ol>${cfg.rules.map(r => `<li><b>${esc(r.title)}</b>${r.detail ? `<br><span class="muted">${esc(r.detail)}</span>` : ''}</li>`).join('')}</ol>`;
+    <ol>${cfg.rules.map(r => `<li><b>${esc(r.title)}</b>${r.detail ? `<br><span class="muted">${esc(r.detail)}</span>` : ''}</li>`).join('')}</ol>
+    ${cfg.demo ? `<p style="font-size:13px;margin-top:12px">لحد ما يتربط محرك الذكاء الاصطناعي، التوليد بيطلع أسئلة <b>تجريبية</b> ماشية على نفس التوزيع.</p>` : ''}`;
 }
-function refreshPlan(parts = ['dist', 'types', 'levels', 'cta']) {
+function refreshPlan(parts = ['dist', 'types', 'levels', 'blooms', 'cta']) {
   planSave();
   if (parts.includes('dist')) { const e = $('#dist'); if (e) e.innerHTML = distHtml(); }
   if (parts.includes('sum')) { const e = $('#sumline'); if (e) { const { sum } = planCounts(); e.className = 'sumline ' + (S.plan.mode === 'manual' && sum !== S.plan.total ? 'bad' : ''); e.innerHTML = sumLine(sum); } }
   if (parts.includes('types')) { const e = $('#mix-types'); if (e) e.innerHTML = mixHtml('types'); }
   if (parts.includes('levels')) { const e = $('#mix-levels'); if (e) e.innerHTML = mixHtml('levels'); }
+  if (parts.includes('blooms')) { const e = $('#mix-blooms'); if (e) e.innerHTML = mixHtml('blooms'); }
   if (parts.includes('cta')) { const e = $('#gen-cta'); if (e) e.innerHTML = genCta(); }
 }
 
@@ -539,13 +549,13 @@ function sortedBank() {
 }
 function filteredBank() {
   const f = S.filters, q = f.q.trim().toLowerCase();
-  return sortedBank().filter(x => (!f.lec || x.lectureId === f.lec) && (!f.type || x.type === f.type) && (!f.diff || x.difficulty === f.diff) && (!f.status || x.status === f.status)
+  return sortedBank().filter(x => (!f.lec || x.lectureId === f.lec) && (!f.type || x.type === f.type) && (!f.diff || x.difficulty === f.diff) && (!f.bl || x.bloom === f.bl) && (!f.status || x.status === f.status)
     && (!q || (x.stem + ' ' + x.options.join(' ')).toLowerCase().includes(q)));
 }
 function step3() {
   const hasDemo = S.bank.some(q => q.source === 'demo'), sel = (k, v) => S.filters[k] === v ? 'selected' : '';
   return `
-    ${hasDemo ? `<div class="banner demo">${ic('info')}<div><b>الأسئلة دي تجريبية لعرض شكل الأداة بس</b>التوليد الحقيقي هيشتغل لما نضيف الشروط الموحدة ومحرك الذكاء الاصطناعي.</div></div>` : ''}
+    ${hasDemo ? `<div class="banner demo">${ic('info')}<div><b>الأسئلة دي تجريبية لعرض شكل الأداة بس</b>ماشية على الشروط الموحدة والتوزيع اللي اخترته، والتوليد الحقيقي هيشتغل بعد ربط محرك الذكاء الاصطناعي.</div></div>` : ''}
     <div id="gen">${genHtml()}</div>
     ${S.bank.length ? `
     <div class="qtools">
@@ -553,6 +563,7 @@ function step3() {
       <select class="select" data-filter="lec"><option value="">كل المحاضرات</option>${S.lectures.map(l => `<option value="${l.id}" ${sel('lec', l.id)}>محاضرة ${l.num}</option>`).join('')}</select>
       <select class="select" data-filter="type"><option value="">كل الأنواع</option>${S.config.types.map(t => `<option value="${t.id}" ${sel('type', t.id)}>${esc(t.label)}</option>`).join('')}</select>
       <select class="select" data-filter="diff"><option value="">كل المستويات</option>${S.config.levels.map(t => `<option value="${t.id}" ${sel('diff', t.id)}>${esc(t.label)}</option>`).join('')}</select>
+      <select class="select" data-filter="bl"><option value="">كل مستويات التفكير</option>${S.config.blooms.map(t => `<option value="${t.id}" ${sel('bl', t.id)}>${esc(t.label)}</option>`).join('')}</select>
       <select class="select" data-filter="status"><option value="">الكل</option><option value="draft" ${sel('status', 'draft')}>غير معتمد</option><option value="approved" ${sel('status', 'approved')}>معتمد</option></select>
       <span class="spacer"></span>
       <button class="btn sm" data-act="approveShown">${ic('check-circle', 'sm')}اعتماد الظاهر</button>
@@ -590,7 +601,7 @@ function qCard(q, n, i = 0) {
   if (S.editing === q.id) return qEdit(q, n);
   const t = cfgType(q.type), lv = cfgLevel(q.difficulty), l = lecById(q.lectureId);
   return `<article class="card q ${q.status === 'approved' ? 'approved' : ''}" data-id="${q.id}" style="animation-delay:${Math.min(i, 10) * 25}ms">
-    <div class="q-h"><span class="qn">${n}</span><span class="tag type">${esc(t.label)}</span><span class="tag ${esc(q.difficulty)}">${esc(lv.label)}</span>
+    <div class="q-h"><span class="qn">${n}</span><span class="tag type">${esc(t.label)}</span><span class="tag ${esc(q.difficulty)}">${esc(lv.label)}</span><span class="tag bloom">${esc(cfgBloom(q.bloom).label)}</span>
       <span class="tag" title="${esc(lecName(q.lectureId))}">${l ? 'محاضرة ' + l.num : 'محاضرة محذوفة'}</span>${q.source === 'demo' ? '<span class="tag demo">تجريبي</span>' : ''}${q.source === 'manual' ? '<span class="tag">يدوي</span>' : ''}
       <span class="q-acts">
         <button class="icon-btn ${q.status === 'approved' ? 'on' : ''}" data-act="approveQ" title="${q.status === 'approved' ? 'إلغاء الاعتماد' : 'اعتماد'}" aria-label="اعتماد">${ic('check-circle')}</button>
@@ -609,6 +620,7 @@ function qEdit(q, n) {
     <div class="row">
       <label class="field"><span>النوع</span><select class="select" name="type">${S.config.types.map(t => `<option value="${t.id}" ${q.type === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>
       <label class="field"><span>الصعوبة</span><select class="select" name="difficulty">${S.config.levels.map(t => `<option value="${t.id}" ${q.difficulty === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>
+      <label class="field"><span>مستوى التفكير</span><select class="select" name="bloom">${S.config.blooms.map(t => `<option value="${t.id}" ${q.bloom === t.id ? 'selected' : ''}>${esc(t.label)}</option>`).join('')}</select></label>
       <label class="field"><span>المحاضرة</span><select class="select" name="lectureId">${S.lectures.map(l => `<option value="${l.id}" ${q.lectureId === l.id ? 'selected' : ''}>محاضرة ${l.num}</option>`).join('')}</select></label>
     </div>
     <label class="field"><span>نص السؤال</span><textarea class="textarea" name="stem" dir="auto" rows="3">${esc(q.stem)}</textarea></label>
@@ -636,6 +648,7 @@ function step4() {
         <div class="brk">
           <h4>حسب النوع</h4>${S.config.types.map(t => row(t.label, m('type', t.id), n)).join('')}
           <h4>حسب الصعوبة</h4>${S.config.levels.map(t => row(t.label, m('difficulty', t.id), n)).join('')}
+          <h4>حسب مستوى التفكير</h4>${S.config.blooms.map(t => row(t.label, m('bloom', t.id), n)).join('')}
           <h4>حسب المحاضرة</h4>${S.lectures.map(l => row('محاضرة ' + l.num, m('lectureId', l.id), n)).join('')}
           <h4>الاعتماد</h4>${row('معتمد', appr, n, 'ok')}
         </div>
@@ -672,7 +685,7 @@ async function leaveCourse() {
 }
 async function openCourse(id) {
   const c = S.courses.find(x => x.id === id); if (!c) return;
-  Object.assign(S, { course: c, view: 'course', lectures: [], bank: [], dirty: false, gen: null, queue: [], editing: null, shown: PAGE, menu: false, filters: { lec: '', type: '', diff: '', status: '', q: '' } });
+  Object.assign(S, { course: c, view: 'course', lectures: [], bank: [], dirty: false, gen: null, queue: [], editing: null, shown: PAGE, menu: false, filters: EMPTY_FILTERS() });
   $('#app').innerHTML = topbar() + `<main class="wrap"><div class="loading"><span class="spin"></span>جاري فتح ${esc(c.code)}…</div></main>`;
   try {
     const [lecs, bank] = await Promise.all([api('listLectures', { courseId: id }), api('getBank', { courseId: id })]);
@@ -686,6 +699,7 @@ function normQ(q) {
   const opts = Array.isArray(q.options) ? q.options.map(String) : [];
   return {
     id: q.id || uid('q_'), lectureId: q.lectureId || '', type: q.type || S.config.types[0].id, difficulty: q.difficulty || 'medium',
+    bloom: (S.config.blooms || []).some(b => b.id === q.bloom) ? q.bloom : (q.type === 'case' ? 'apply' : 'recall'),
     stem: String(q.stem || ''), options: opts, answer: clamp(toInt(q.answer, 0), 0, Math.max(0, opts.length - 1)),
     explanation: String(q.explanation || ''), status: q.status === 'approved' ? 'approved' : 'draft', source: q.source || 'manual', createdBy: q.createdBy || (S.user && S.user.name) || ''
   };
@@ -750,18 +764,20 @@ async function generate() {
     if (!v) return;
     if (v === 'replace') S.bank = S.bank.filter(q => !ids.has(q.lectureId));
   }
-  const gen = S.gen = { running: true, stop: false, stopped: false, jobs };
+  const gen = S.gen = { running: true, stop: false, stopped: false, jobs }, lp = lecturePools(lecs, per);
   S.step = 3; refreshCourse();
   const cid = S.course.id;
   for (const j of jobs) {
     if (gen.stop) break;
     j.status = 'run'; refreshGen();
-    const types = splitShares(j.n, S.plan.types, S.config.types), levels = splitShares(j.n, S.plan.levels, S.config.levels);
+    const pools = lp[j.id];
     try {
       let left = j.n, off = 0;
       while (left > 0 && !gen.stop) {
         const n = Math.min(CHUNK, left);
-        const r = await api('generateForLecture', { courseId: cid, lectureId: j.id, spec: { count: n, offset: off, types: takeMix(types, n, S.config.types), levels: takeMix(levels, n, S.config.levels) } });
+        const spec = { count: n, offset: off, avoid: S.bank.filter(q => q.lectureId === j.id && q.stem).map(q => q.stem.slice(0, 150)).slice(-80) };
+        MIX.forEach(k => spec[k] = takeMix(pools[k], n, S.config[k]));
+        const r = await api('generateForLecture', { courseId: cid, lectureId: j.id, spec });
         if (S.view !== 'course' || !S.course || S.course.id !== cid || S.gen !== gen) return;
         r.questions.forEach(q => S.bank.push(normQ(q)));
         j.got += r.questions.length; left -= n; off += n;
@@ -789,15 +805,15 @@ function saveEdit(id) {
   if (keep.length < 2) return toast('لازم اختيارين على الأقل', 'bad');
   if (ans < 0 || !opts[ans]) return toast('علّم على الإجابة الصحيحة', 'bad');
   const q = findQ(id);
-  Object.assign(q, { type: g('type'), difficulty: g('difficulty'), lectureId: g('lectureId'), stem, explanation: g('explanation').trim(), options: keep.map(x => x.o), answer: keep.findIndex(x => x.i === ans) });
+  Object.assign(q, { type: g('type'), difficulty: g('difficulty'), bloom: g('bloom'), lectureId: g('lectureId'), stem, explanation: g('explanation').trim(), options: keep.map(x => x.o), answer: keep.findIndex(x => x.i === ans) });
   if (q.source === 'demo') q.source = 'manual';
   delete q._new; S.editing = null; setDirty(true); refreshQList();
 }
 function addQuestion() {
   const t = S.config.types[0];
-  const q = normQ({ id: uid('q_'), lectureId: S.filters.lec || (S.lectures[0] && S.lectures[0].id) || '', type: t.id, difficulty: 'medium', stem: '', options: Array.from({ length: t.options || 4 }, () => ''), answer: 0, source: 'manual' });
+  const q = normQ({ id: uid('q_'), lectureId: S.filters.lec || (S.lectures[0] && S.lectures[0].id) || '', type: t.id, difficulty: 'easy', bloom: 'recall', stem: '', options: Array.from({ length: t.options || 4 }, () => ''), answer: 0, source: 'manual' });
   q._new = true; S.bank.unshift(q); S.editing = q.id;
-  S.filters = { lec: '', type: '', diff: '', status: '', q: '' };
+  S.filters = EMPTY_FILTERS();
   refreshCourse(['step']);
   const el = document.querySelector(`[data-qedit="${q.id}"]`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -831,8 +847,8 @@ async function exportWord() {
         parts.push(wP([{ t: l ? `Lecture ${l.num}: ${l.title}` : 'Other questions', b: true, sz: 26, color: '0062B0' }], { before: 240, after: 120, keep: true, style: 'Heading2' }));
       }
       n++;
-      const t = cfgType(q.type), lv = cfgLevel(q.difficulty);
-      parts.push(wP([{ t: `${n}. `, b: true }, { t: q.stem }, { t: `   [${t.en} · ${lv.en}]`, sz: 16, color: '8A94A3' }], { keep: true, after: 60, before: 120 }));
+      const t = cfgType(q.type), lv = cfgLevel(q.difficulty), bl = cfgBloom(q.bloom);
+      parts.push(wP([{ t: `${n}. `, b: true }, { t: q.stem }, ...(mode === 'none' ? [] : [{ t: `   [${t.en} · ${lv.en} · ${bl.en}]`, sz: 16, color: '8A94A3' }])], { keep: true, after: 60, before: 120 }));
       q.options.forEach((o, i) => {
         const right = mode === 'inline' && i === q.answer;
         parts.push(wP([{ t: `${LETTERS[i]}. `, b: true, color: right ? '14865A' : undefined }, { t: o, b: right, color: right ? '14865A' : undefined }], { ind: 360, after: 20, keep: i < q.options.length - 1 }));
@@ -842,12 +858,12 @@ async function exportWord() {
         if (q.explanation) parts.push(wP([{ t: q.explanation, sz: 19, color: '555555' }], { ind: 360, after: 60 }));
       }
       const l = lecById(q.lectureId);
-      key.push([String(n), LETTERS[q.answer] || '-', l ? String(l.num) : '-', t.en, lv.en]);
+      key.push([String(n), LETTERS[q.answer] || '-', l ? String(l.num) : '-', t.en, lv.en, bl.en]);
     }
     if (mode === 'key') {
       parts.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
       parts.push(wP([{ t: 'Answer Key', b: true, sz: 28, color: '0B2545' }], { after: 160, style: 'Heading1' }));
-      parts.push(wTable([['Q', 'Answer', 'Lecture', 'Type', 'Difficulty'], ...key], [900, 1100, 1100, 2600, 1700]));
+      parts.push(wTable([['Q', 'Answer', 'Lecture', 'Type', 'Difficulty', 'Thinking'], ...key], [800, 1000, 1000, 2300, 1400, 1700]));
       parts.push(wP('', { after: 0 }));
     }
     downloadBlob(await docxBlob(parts.join('')), fileBase() + (mode === 'none' ? ' (questions only)' : '') + '.docx');
@@ -860,14 +876,14 @@ async function exportExcel() {
     if (!window.XLSX) await loadScript(LIBS.xlsx);
     const maxO = Math.max(2, ...list.map(q => q.options.length));
     const rows = list.map((q, i) => {
-      const l = lecById(q.lectureId), r = { '#': i + 1, Lecture: l ? l.num : '', 'Lecture title': l ? l.title : '', Type: cfgType(q.type).en, Difficulty: cfgLevel(q.difficulty).en, Question: q.stem };
+      const l = lecById(q.lectureId), r = { '#': i + 1, Lecture: l ? l.num : '', 'Lecture title': l ? l.title : '', Type: cfgType(q.type).en, Difficulty: cfgLevel(q.difficulty).en, Thinking: cfgBloom(q.bloom).en, Question: q.stem };
       for (let k = 0; k < maxO; k++) r[LETTERS[k]] = q.options[k] || '';
       if (S.exp.mode !== 'none') { r.Answer = LETTERS[q.answer]; r.Explanation = q.explanation; }
       r.Status = q.status === 'approved' ? 'Approved' : 'Draft';
       return r;
     });
     const ws = window.XLSX.utils.json_to_sheet(rows);
-    ws['!cols'] = [{ wch: 5 }, { wch: 8 }, { wch: 28 }, { wch: 15 }, { wch: 10 }, { wch: 70 }, ...Array.from({ length: maxO }, () => ({ wch: 28 })), { wch: 8 }, { wch: 40 }, { wch: 10 }];
+    ws['!cols'] = [{ wch: 5 }, { wch: 8 }, { wch: 28 }, { wch: 15 }, { wch: 10 }, { wch: 14 }, { wch: 70 }, ...Array.from({ length: maxO }, () => ({ wch: 28 })), { wch: 8 }, { wch: 40 }, { wch: 10 }];
     const wb = window.XLSX.utils.book_new(); window.XLSX.utils.book_append_sheet(wb, ws, 'Question Bank');
     downloadBlob(new Blob([window.XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), fileBase() + '.xlsx');
     toast('اتجهز ملف Excel');
@@ -942,7 +958,7 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.bind === 'homeQ') { S.homeQ = t.value; $('#courses').innerHTML = coursesGrid(); animateRings(); return; }
   if (t.dataset.bind === 'total') { const v = toInt(t.value, 0); if (v >= 1) { S.plan.total = clamp(v, 1, S.config.maxTotal); refreshPlan(); } return; }
-  if (t.dataset.man) { S.plan.manual[t.dataset.man] = clamp(toInt(t.value, 0), 0, S.config.maxPerLecture); planSave(); refreshPlan(['sum', 'types', 'levels', 'cta']); return; }
+  if (t.dataset.man) { S.plan.manual[t.dataset.man] = clamp(toInt(t.value, 0), 0, S.config.maxPerLecture); planSave(); refreshPlan(['sum', 'types', 'levels', 'blooms', 'cta']); return; }
   if (t.dataset.share) { const [k, id] = t.dataset.share.split(':'); S.plan[k][id] = clamp(toInt(t.value, 0), 0, 100); planSave(); updateMixCounts(k); refreshPlan(['cta']); return; }
   if (t.dataset.filter === 'q') { S.filters.q = t.value; S.shown = PAGE; clearTimeout(t._tm); t._tm = setTimeout(refreshQList, 200); return; }
 });

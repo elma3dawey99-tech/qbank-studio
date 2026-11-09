@@ -7,7 +7,8 @@
  * Google Sheet + Drive and answers JSON requests:  POST {action, token, args}  →  {ok, data} | {error, message}
  *
  * Script Properties (created automatically): DB_ID, ROOT_ID, TOKEN_SECRET.
- * Phase 1: generation returns clearly-marked demo questions until CONFIG.rules + the AI engine are added.
+ * The unified question standard lives in CONFIG + PROMPT_SYSTEM. Until the AI engine is connected, generation
+ * returns clearly-marked demo questions that already follow the plan (type, difficulty, thinking level, answer key).
  */
 
 var FRONTEND_URL = 'https://ecc-qbank.pages.dev/';
@@ -26,30 +27,47 @@ var APP = {
 
 /* ===================== Unified conditions (same for every course) ===================== */
 var CONFIG = {
-  rulesReady: false,
-  rules: [],                       // [{title:'', detail:''}]
-  lockShares: false,               // true = colleagues can't change the type / difficulty mix
+  version: 3,                      // bump when the defaults change, so saved plans reset to them
+  rulesReady: true,
+  rules: [
+    { title: 'لغة بسيطة', detail: 'إنجليزي سهل وجمل قصيرة، بنفس مصطلحات المحاضرة' },
+    { title: 'مش منقول حرفياً', detail: 'صياغة وزاوية بعيدة عن الأسئلة المتوقعة من أي AI' },
+    { title: '4 اختيارات وإجابة واحدة', detail: 'من نفس النوع وبنفس الطول، والصح متوزّع على A–D' },
+    { title: 'ممنوعات', detail: 'Which is true · EXCEPT/NOT · All/None of the above · always/never' },
+    { title: 'صح وخطأ', detail: 'جملة قصيرة بفكرة واحدة، من غير نفي أو تعميم أو كلمات مبهمة' },
+    { title: 'الحالة الإكلينيكية', detail: 'موقف قصير بأرقام حقيقية، وسؤال عن الخطوة الأنسب' },
+    { title: 'الصعوبة من التفكير', detail: 'تذكّر / فهم / تطبيق — مفيش أسئلة تعجيزية' },
+    { title: 'شرح ومراجعة', detail: 'كل سؤال معاه شرح، ويتعتمد من عضو هيئة التدريس' }
+  ],
+  lockShares: false,               // true = colleagues can't change the mixes
   types: [
-    { id: 'mcq',  label: 'اختيار من متعدد', en: 'MCQ',            options: 4, share: 60 },
+    { id: 'mcq',  label: 'اختيار من متعدد', en: 'MCQ',            options: 4, share: 75 },
     { id: 'tf',   label: 'صح وخطأ',          en: 'True / False',   options: 2, share: 20 },
-    { id: 'case', label: 'حالة إكلينيكية',   en: 'Case-based MCQ', options: 4, share: 20 }
+    { id: 'case', label: 'حالة إكلينيكية',   en: 'Case-based MCQ', options: 4, share: 5 }
   ],
   levels: [
-    { id: 'easy',   label: 'سهل',   en: 'Easy',   share: 30 },
-    { id: 'medium', label: 'متوسط', en: 'Medium', share: 50 },
-    { id: 'hard',   label: 'صعب',   en: 'Hard',   share: 20 }
+    { id: 'easy',   label: 'سهل',   en: 'Easy',   share: 60 },
+    { id: 'medium', label: 'متوسط', en: 'Medium', share: 30 },
+    { id: 'hard',   label: 'صعب',   en: 'Hard',   share: 10 }
   ],
-  defaultTotal: 50,
-  maxPerLecture: 120,
+  blooms: [
+    { id: 'recall',     label: 'تذكّر', en: 'Recall',        share: 70 },
+    { id: 'understand', label: 'فهم',   en: 'Understanding', share: 20 },
+    { id: 'apply',      label: 'تطبيق', en: 'Application',   share: 10 }
+  ],
+  bankSizes: [200, 400],           // 200 questions per credit hour; only 200 / 400 for now
+  defaultTotal: 200,
+  maxPerLecture: 200,
   maxTotal: 600,
-  maxLectureChars: 600000
+  maxLectureChars: 600000,
+  promptLectureChars: 60000        // lecture text sent to the AI engine per request
 };
 
 var SHEETS = {
   Users:     ['id', 'name', 'nameKey', 'salt', 'hash', 'role', 'createdAt', 'lastLoginAt'],
   Courses:   ['id', 'code', 'name', 'level', 'program', 'target', 'folderId', 'createdBy', 'createdAt', 'updatedBy', 'updatedAt', 'savedBy', 'savedAt'],
   Lectures:  ['id', 'courseId', 'num', 'title', 'fileName', 'kind', 'units', 'words', 'textFileId', 'uploadedBy', 'uploadedAt'],
-  Questions: ['id', 'courseId', 'lectureId', 'type', 'difficulty', 'stem', 'options', 'answer', 'explanation', 'status', 'source', 'createdBy', 'updatedAt']
+  Questions: ['id', 'courseId', 'lectureId', 'type', 'difficulty', 'stem', 'options', 'answer', 'explanation', 'status', 'source', 'createdBy', 'updatedAt', 'bloom']
 };
 
 /* ===================== ECC course catalog (AHS Curricula, Jan 2021) ===================== */
@@ -181,7 +199,7 @@ var API = {
     if (!cat) fail_('input', 'اختار المادة من القائمة');
     var rec = {
       code: cat.code, name: cat.name, level: String(cat.level), program: APP.departmentEn,
-      target: String(int_(a.target, 0, CONFIG.maxTotal * 4))
+      target: String(CONFIG.bankSizes.indexOf(Number(a.target)) >= 0 ? Number(a.target) : CONFIG.bankSizes[0])
     };
     db_();
     return withLock_(function () {
@@ -290,8 +308,18 @@ var API = {
     if (l.courseId !== str_(a.courseId, 40)) fail_('input', 'المحاضرة مش تبع المادة دي');
     var spec = cleanSpec_(a.spec);
     var text = lectureText_(l);
-    // Phase 2: when CONFIG.rulesReady and the AI key exist, the real generator goes here.
-    return { demo: true, questions: demoQuestions_(l, text, spec) };
+    var slots = planSlots_(l, spec);
+    // The AI engine is connected in the next step: it sends buildPrompt_(...) and maps the reply onto `slots`.
+    return { demo: true, questions: demoQuestions_(l, text, slots) };
+  },
+
+  previewPrompt: function (a, tok) {
+    var u = auth_(tok);
+    if (u.role !== 'admin') fail_('auth', 'متاح لمسؤول الأداة بس');
+    var l = lectureById_(str_(a.lectureId, 40));
+    var c = rows_('Courses').filter(function (x) { return x.id === l.courseId; })[0] || {};
+    var spec = cleanSpec_(a.spec || { count: 10 });
+    return buildPrompt_(pubCourse_(c), l, lectureText_(l), planSlots_(l, spec), spec.avoid);
   },
 
   getBank: function (a, tok) {
@@ -301,7 +329,7 @@ var API = {
       var opts = [];
       try { opts = JSON.parse(q.options || '[]'); } catch (e) {}
       return {
-        id: q.id, lectureId: q.lectureId, type: q.type, difficulty: q.difficulty, stem: q.stem,
+        id: q.id, lectureId: q.lectureId, type: q.type, difficulty: q.difficulty, bloom: q.bloom || (q.type === 'case' ? 'apply' : 'recall'), stem: q.stem,
         options: opts, answer: Number(q.answer) || 0, explanation: q.explanation, status: q.status,
         source: q.source, createdBy: q.createdBy, updatedAt: Number(q.updatedAt) || 0
       };
@@ -315,6 +343,7 @@ var API = {
     if (qs.length > CONFIG.maxTotal * 4) fail_('input', 'عدد الأسئلة أكبر من المسموح');
     var types = CONFIG.types.map(function (t) { return t.id; });
     var levels = CONFIG.levels.map(function (t) { return t.id; });
+    var blooms = CONFIG.blooms.map(function (t) { return t.id; });
     var now = String(Date.now());
     var rows = qs.map(function (q) {
       var opts = (Array.isArray(q.options) ? q.options : []).slice(0, 8).map(function (o) { return str_(o, 1000); });
@@ -324,6 +353,7 @@ var API = {
         lectureId: str_(q.lectureId, 40),
         type: types.indexOf(q.type) >= 0 ? q.type : types[0],
         difficulty: levels.indexOf(q.difficulty) >= 0 ? q.difficulty : levels[1] || levels[0],
+        bloom: blooms.indexOf(q.bloom) >= 0 ? q.bloom : blooms[0],
         stem: str_(q.stem, 4000),
         options: JSON.stringify(opts),
         answer: String(int_(q.answer, 0, Math.max(0, opts.length - 1))),
@@ -405,7 +435,8 @@ function publicConfig_() {
   var hasAI = !!PropertiesService.getScriptProperties().getProperty('AI_API_KEY');
   return {
     rulesReady: CONFIG.rulesReady, rules: CONFIG.rules, lockShares: CONFIG.lockShares,
-    types: CONFIG.types, levels: CONFIG.levels, defaultTotal: CONFIG.defaultTotal,
+    version: CONFIG.version, types: CONFIG.types, levels: CONFIG.levels, blooms: CONFIG.blooms,
+    bankSizes: CONFIG.bankSizes, defaultTotal: CONFIG.defaultTotal,
     maxPerLecture: CONFIG.maxPerLecture, maxTotal: CONFIG.maxTotal, maxLectureChars: CONFIG.maxLectureChars,
     demo: !(CONFIG.rulesReady && hasAI)
   };
@@ -444,7 +475,7 @@ function pubLecture_(l) {
   };
 }
 
-/* ===================== Generation (phase 1 = demo) ===================== */
+/* ===================== Generation: plan → prompt → (AI engine | demo) ===================== */
 function cleanSpec_(spec) {
   spec = spec || {};
   var count = int_(spec.count, 1, CONFIG.maxPerLecture);
@@ -454,7 +485,11 @@ function cleanSpec_(spec) {
     if (sum !== count) out = splitShares_(count, list);
     return out;
   }
-  return { count: count, offset: int_(spec.offset, 0, 100000), types: mix(spec.types, CONFIG.types), levels: mix(spec.levels, CONFIG.levels) };
+  var avoid = (Array.isArray(spec.avoid) ? spec.avoid : []).slice(-80).map(function (x) { return str_(x, 160); }).filter(String);
+  return {
+    count: count, offset: int_(spec.offset, 0, 100000), avoid: avoid,
+    types: mix(spec.types, CONFIG.types), levels: mix(spec.levels, CONFIG.levels), blooms: mix(spec.blooms, CONFIG.blooms)
+  };
 }
 
 function splitShares_(n, list) {
@@ -467,36 +502,174 @@ function splitShares_(n, list) {
   return out;
 }
 
-function demoQuestions_(l, text, spec) {
+function rng_(seedText) {
+  var h = 2166136261;
+  for (var i = 0; i < seedText.length; i++) { h ^= seedText.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return function () {
+    h += 0x6D2B79F5; var t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffle_(arr, rnd) {
+  for (var i = arr.length - 1; i > 0; i--) { var j = Math.floor(rnd() * (i + 1)); var x = arr[i]; arr[i] = arr[j]; arr[j] = x; }
+  return arr;
+}
+
+/**
+ * One slot per question: type × thinking level × difficulty × position of the correct answer.
+ * - Case questions are always "apply"; True/False is never "apply".
+ * - Harder slots go to higher thinking levels (apply → understand → recall).
+ * - The correct answer is spread evenly over A–D, and True/False is about half true.
+ */
+function planSlots_(l, spec) {
+  var rnd = rng_(String(l.id) + ':' + spec.offset);
+  var slots = [];
+  CONFIG.types.forEach(function (t) { for (var i = 0; i < spec.types[t.id]; i++) slots.push({ type: t.id }); });
+  var left = {}; CONFIG.blooms.forEach(function (b) { left[b.id] = spec.blooms[b.id] || 0; });
+  function take(id) { if (left[id] > 0) { left[id]--; return true; } return false; }
+  slots.filter(function (s) { return s.type === 'case'; }).forEach(function (s) { take('apply'); s.bloom = 'apply'; });
+  slots.filter(function (s) { return s.type === 'mcq'; }).forEach(function (s) { if (take('apply')) s.bloom = 'apply'; });
+  var pool = [];
+  ['recall', 'understand'].forEach(function (id) { for (var i = 0; i < left[id]; i++) pool.push(id); });
+  for (var k = 0; k < left.apply; k++) pool.push('understand');
+  pool = shuffle_(pool, rnd);
+  shuffle_(slots.filter(function (s) { return !s.bloom; }), rnd).forEach(function (s, i) { s.bloom = pool[i] || 'recall'; });
+  var rank = { apply: 0, understand: 1, recall: 2 };
+  var diffs = [];
+  ['hard', 'medium', 'easy'].forEach(function (d) { for (var i = 0; i < (spec.levels[d] || 0); i++) diffs.push(d); });
+  slots = shuffle_(slots, rnd).sort(function (a, b) { return rank[a.bloom] - rank[b.bloom]; });
+  slots.forEach(function (s, i) { s.difficulty = diffs[i] || 'easy'; });
+  var letters = [], tf = [];
+  function nextLetter() { if (!letters.length) letters = shuffle_([0, 1, 2, 3], rnd); return letters.pop(); }
+  function nextTf() { if (!tf.length) tf = shuffle_([0, 1], rnd); return tf.pop(); }
+  slots = shuffle_(slots, rnd);
+  slots.forEach(function (s, i) { s.n = i + 1; s.answer = s.type === 'tf' ? nextTf() : nextLetter(); });
+  return slots;
+}
+
+var PROMPT_SYSTEM = [
+  'You write exam questions for undergraduate students of the Emergency & Critical Care Technology (ECC) program',
+  'at Delta University for Science and Technology, Egypt. Students study in English as a second language.',
+  'Follow the department\'s unified question standard exactly.',
+  '',
+  'LANGUAGE',
+  '- Simple, clear English (CEFR B1-B2): short sentences, active voice, present tense, common words.',
+  '- Recall and understanding stems: about 20 words or fewer. Case vignettes: 3-4 short sentences (about 60 words).',
+  '- Use the lecture\'s own technical terms, but never copy a lecture sentence word for word.',
+  '- No idioms, no rare words, no patient names, no country-specific services or phone numbers.',
+  '- Units: mg/dL, mmHg, degrees C, breaths/min, beats/min.',
+  '- Sound like an experienced lecturer asking his own students, not like a textbook or a chatbot.',
+  '',
+  'CONTENT',
+  '- Every question must be answerable from the lecture text given. Never test facts that are not in it.',
+  '- Test important, practical points. No trivia, no rare exceptions, no trick wording.',
+  '- Each question stands alone: it must not give away another question\'s answer, and must not repeat or',
+  '  paraphrase another question in this batch or in the AVOID list.',
+  '',
+  'THINKING LEVEL (given per slot)',
+  '- recall: retrieve one fact (a value, definition, step or sign). Short stem, no scenario.',
+  '- understand: explain a cause, a mechanism or the link between two facts ("Why ...", "What happens to ... when ...").',
+  '- apply: use the knowledge in a short, specific situation (emergency department, ambulance, ICU) and choose',
+  '  the best action, interpretation or next step.',
+  '',
+  'DIFFICULTY (given per slot)',
+  '- easy: a core fact stated clearly in the lecture; most students who studied will answer it.',
+  '- medium: needs understanding, or choosing between two close options.',
+  '- hard: links two facts from different parts of the lecture, or interprets values in a situation.',
+  '  Hard must stay fair for a good student who studied; never obscure.',
+  '',
+  'MCQ AND CASE (one best answer)',
+  '- Exactly 4 options and exactly one correct option, placed at the index given in the slot (0=A, 1=B, 2=C, 3=D).',
+  '- Cover-the-options rule: a good student should be able to answer from the stem alone.',
+  '- Options are homogeneous (all diagnoses, all drugs, all values ...), similar in length and grammar.',
+  '  The correct option is never the longest or the most detailed.',
+  '- Distractors are plausible: real student mistakes, or facts that are true in another part of the lecture.',
+  '- Numeric options go in ascending order with the same format; choose the distractor values so that the',
+  '  correct value still sits at the required index.',
+  '- Forbidden: "Which of the following is true/correct", EXCEPT / NOT / LEAST, "All of the above",',
+  '  "None of the above", combined options ("A and B"), absolute words (always, never, all, only) in options,',
+  '  a stem word repeated only in the correct option, grammatical cues (a/an, singular/plural).',
+  '- case: always the apply level. Vignette order: age, sex, setting and complaint; then only the relevant',
+  '  history and examination; then the key vital signs or lab values; then one clear question such as',
+  '  "What is the most appropriate next step?" or "Which one is the most likely cause?".',
+  '',
+  'TRUE / FALSE',
+  '- options are exactly ["True", "False"]; answer 0 = True, 1 = False, as given in the slot.',
+  '- One short sentence with one idea. No negatives (never a double negative). No vague words',
+  '  (often, sometimes, usually, significant, large). No absolutes (always, never, all, only). No trick words.',
+  '- The statement is 100% true or 100% false. A false statement is false on an important point,',
+  '  not on a small detail swapped to trap students.',
+  '',
+  'NOT PREDICTABLE BY AI (very important)',
+  'Students may upload this lecture to an AI tool the night before the exam and ask it for questions.',
+  'Our questions must not match what such a tool produces, while staying fair and simple.',
+  '1. First write in "predictable" the 10 most obvious questions a generic AI would write from this lecture',
+  '   (usually one lecture sentence turned into one question: "What is the normal ...?",',
+  '   "Which of the following best describes ...?").',
+  '2. Then write the questions so that none matches a predictable item in wording or angle. Use paraphrase;',
+  '   flip the question (give the sign, value or situation and ask for the concept); link two facts;',
+  '   short realistic situations with numbers to interpret.',
+  '3. Never use chatbot stem templates: "Which of the following best describes ...", "What is the primary',
+  '   function/role of ...", "Which statement is true regarding ...", "All of the following ... except".',
+  '',
+  'EXPLANATION',
+  '- 1-2 short, simple sentences: why the correct option is right (and, if useful, why the most tempting',
+  '  distractor is wrong).',
+  '',
+  'OUTPUT',
+  'Return only JSON, no markdown:',
+  '{"predictable": [string x 10], "questions": [{"n": int, "stem": string, "options": [string],',
+  ' "answer": int, "explanation": string, "lecture_ref": string}]}',
+  'Exactly one question per slot, in slot order. lecture_ref = a few words from the lecture that locate the fact.'
+].join('\n');
+
+function buildPrompt_(course, l, text, slots, avoid) {
+  var bl = {}; CONFIG.blooms.forEach(function (b) { bl[b.id] = b.id; });
+  var lines = [
+    'Course: ' + (course.code || '') + ' - ' + (course.name || '') + ' (Level ' + (course.level || '') + ')',
+    'Lecture ' + l.num + ': ' + l.title,
+    '',
+    'SLOTS (write exactly one question per slot):'
+  ];
+  slots.forEach(function (s) {
+    lines.push(s.n + '. type=' + s.type + ', difficulty=' + s.difficulty + ', thinking=' + bl[s.bloom] +
+      ', correct=' + (s.type === 'tf' ? (s.answer === 0 ? 'True (answer 0)' : 'False (answer 1)') : 'ABCD'.charAt(s.answer) + ' (answer ' + s.answer + ')'));
+  });
+  if (avoid && avoid.length) {
+    lines.push('', 'AVOID (already in the bank - do not repeat or paraphrase):');
+    avoid.forEach(function (x) { lines.push('- ' + x); });
+  }
+  lines.push('', 'LECTURE TEXT:', '<<<', String(text).slice(0, CONFIG.promptLectureChars), '>>>');
+  return { system: PROMPT_SYSTEM, user: lines.join('\n'), slots: slots };
+}
+
+function demoQuestions_(l, text, slots) {
   var lines = String(text).split(/\n+/).map(function (s) { return s.replace(/^\s*[-•▪◦*]\s{0,}/, '').replace(/\s+/g, ' ').trim(); })
     .filter(function (s) { var w = s.split(' ').length; return w >= 4 && w <= 30 && !/^\[(slide|page)/i.test(s); });
   if (!lines.length) lines = ['this lecture'];
-  var typeSeq = [], levelSeq = [];
-  CONFIG.types.forEach(function (t) { for (var i = 0; i < spec.types[t.id]; i++) typeSeq.push(t.id); });
-  CONFIG.levels.forEach(function (t) { for (var i = 0; i < spec.levels[t.id]; i++) levelSeq.push(t.id); });
-  var out = [];
-  for (var i = 0; i < spec.count; i++) {
-    var type = typeSeq[i] || 'mcq';
-    var src = lines[(i * 7 + spec.offset) % lines.length];
-    var words = src.split(' ');
-    var excerpt = words.slice(0, 12).join(' ') + (words.length > 12 ? '…' : '');
+  var bloomEn = {}; CONFIG.blooms.forEach(function (b) { bloomEn[b.id] = b.en; });
+  return slots.map(function (s, i) {
+    var src = lines[(i * 7 + s.n) % lines.length].split(' ');
+    var excerpt = src.slice(0, 12).join(' ') + (src.length > 12 ? '…' : '');
+    var tag = '(demo · ' + bloomEn[s.bloom] + ' · ' + s.difficulty + ')';
     var q = {
-      id: 'q_' + hex_(12), lectureId: l.id, type: type, difficulty: levelSeq[(i * 5) % levelSeq.length] || 'medium',
-      status: 'draft', source: 'demo', explanation: 'Sample explanation — the real rationale is written once the unified conditions are set.'
+      id: 'q_' + hex_(12), lectureId: l.id, type: s.type, difficulty: s.difficulty, bloom: s.bloom, answer: s.answer,
+      status: 'draft', source: 'demo', explanation: 'Sample explanation — real questions follow the unified standard once the AI engine is connected.'
     };
-    if (type === 'tf') {
-      q.stem = 'Sample statement (demo) based on: “' + excerpt + '”';
-      q.options = ['True', 'False']; q.answer = i % 2;
-    } else if (type === 'case') {
-      q.stem = 'Sample case (demo): A patient presents in the emergency department… Based on “' + excerpt + '”, what is the most appropriate next step?';
-      q.options = ['Option A (sample)', 'Option B (sample)', 'Option C (sample)', 'Option D (sample)']; q.answer = i % 4;
+    if (s.type === 'tf') {
+      q.stem = 'Sample statement ' + tag + ' based on: “' + excerpt + '”';
+      q.options = ['True', 'False'];
+    } else if (s.type === 'case') {
+      q.stem = 'Sample case ' + tag + ': A 45-year-old man is brought to the emergency department… Based on “' + excerpt + '”, what is the most appropriate next step?';
+      q.options = ['Option A (sample)', 'Option B (sample)', 'Option C (sample)', 'Option D (sample)'];
     } else {
-      q.stem = 'Sample question (demo) about: “' + excerpt + '” — which of the following is correct?';
-      q.options = ['Option A (sample)', 'Option B (sample)', 'Option C (sample)', 'Option D (sample)']; q.answer = (i + 1) % 4;
+      q.stem = 'Sample question ' + tag + ' about: “' + excerpt + '”';
+      q.options = ['Option A (sample)', 'Option B (sample)', 'Option C (sample)', 'Option D (sample)'];
     }
-    out.push(q);
-  }
-  return out;
+    return q;
+  });
 }
 
 /* ===================== Storage helpers ===================== */

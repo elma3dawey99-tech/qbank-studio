@@ -320,6 +320,8 @@ a{color:var(--brand)}
 .tag.type{background:var(--brand-soft);color:var(--brand-700)}
 .tag.easy{background:var(--ok-soft);color:var(--ok)}.tag.medium{background:var(--warn-soft);color:var(--warn)}.tag.hard{background:var(--bad-soft);color:var(--bad)}
 .tag.demo{background:#F1ECF8;color:#6B4B9A}
+.tag.bloom{background:#E6F4F2;color:#0E7C74}
+.size-seg{display:flex}.size-seg button{flex:1;height:38px}
 .q-acts{margin-inline-start:auto;display:flex;gap:2px}
 .q-stem{font-size:15.5px;font-weight:500;margin-bottom:12px;white-space:pre-wrap}
 .q-opts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
