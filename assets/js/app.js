@@ -115,56 +115,41 @@ function topbar() {
   </div></header>`;
 }
 function footer() {
-  return `<footer class="foot"><span>قسم ${esc(BRAND.department)} · ${esc(BRAND.faculty)} · ${esc(BRAND.university)}</span><span>${MOCK ? 'وضع المعاينة — البيانات على المتصفح ده بس · ' : ''}QBank Studio — تصميم ${esc(BRAND.designer)}</span></footer>`;
+  return `<footer class="foot"><span>قسم ${esc(BRAND.department)} · ${esc(BRAND.faculty)} · ${esc(BRAND.university)}</span><span>${MOCK ? 'وضع المعاينة — البيانات على المتصفح ده بس · ' : ''}تصميم ${esc(BRAND.designer)}</span></footer>`;
 }
 
 /* ---------------- view: auth ---------------- */
 function viewAuth() {
   const reg = S.authTab === 'register', last = store('qb_name') || '';
   return `<div class="auth">
-    <section class="auth-hero">
-      <span class="orb a"></span><span class="orb b"></span>
-      <div class="hero-in">
-        <div class="logo-card">${logoImg(52)}</div>
-        <div class="hero-title">
-          <span class="kicker"><i></i>${termHtml(term())}</span>
-          <h1><span>بنوك الأسئلة</span></h1>
-          <p>قسم ${esc(BRAND.department)}</p>
-        </div>
-        <ul class="features">
-          <li><span class="fi">${ic('upload')}</span><div><b>ارفع محاضرات المادة</b><small>PowerPoint و PDF و Word — النص بيتقري على جهازك</small></div></li>
-          <li><span class="fi">${ic('layers')}</span><div><b>حدد العدد والتوزيع</b><small>بنفس الشروط الموحدة لكل مواد القسم</small></div></li>
-          <li><span class="fi">${ic('word')}</span><div><b>راجع وصدّر</b><small>ملف Word بنموذج إجابة، وملف Excel</small></div></li>
-        </ul>
-        ${ecg()}
-        <div class="hero-foot"><span>${esc(BRAND.faculty)} · ${esc(BRAND.university)}</span><span>QBank Studio</span></div>
+    <div class="auth-card">
+      <div class="auth-brand">
+        ${logoImg(46)}
+        <h1>بنوك الأسئلة</h1>
+        <p>قسم ${esc(BRAND.department)}</p>
+        <span class="chip term">${ic('calendar', 'sm')}${termHtml(term())}</span>
       </div>
-    </section>
-    <section class="auth-panel">
-      <div class="auth-card">
-        <img class="emblem" src="assets/img/emblem.png" alt="">
-        <div class="tabs" data-on="${S.authTab}" role="tablist">
-          <span class="ind"></span>
-          <button class="${reg ? '' : 'on'}" data-act="authTab" data-tab="login" role="tab" aria-selected="${!reg}">تسجيل الدخول</button>
-          <button class="${reg ? 'on' : ''}" data-act="authTab" data-tab="register" role="tab" aria-selected="${reg}">حساب جديد</button>
-        </div>
-        <h2>${reg ? 'اعمل حسابك' : 'أهلاً بيك تاني'}</h2>
-        <p class="lead">${reg ? 'مرة واحدة بس، وبعدها تدخل من أي جهاز في أي وقت.' : 'ادخل باسمك الثنائي وكلمة المرور.'}</p>
-        <form data-form="${S.authTab}" autocomplete="on" novalidate>
-          <label class="field"><span>الاسم الثنائي</span>
-            <input class="input" name="name" value="${esc(reg ? '' : last)}" placeholder="مثال: يوسف محروس" autocomplete="${reg ? 'name' : 'username'}" required dir="auto">
-            ${reg ? '<small>الاسم الأول واسم العائلة — ده اللي هتدخل بيه</small>' : ''}</label>
-          <label class="field"><span>كلمة المرور</span>
-            <div class="input-wrap"><input class="input ltr" name="password" type="password" placeholder="••••••" autocomplete="${reg ? 'new-password' : 'current-password'}" required>
-            <button type="button" class="icon-btn" data-act="peek" aria-label="إظهار كلمة المرور">${ic('eye')}</button></div>
-            ${reg ? '<small>6 حروف أو أرقام على الأقل</small>' : ''}</label>
-          ${reg ? `<label class="field"><span>تأكيد كلمة المرور</span><input class="input ltr" name="confirm" type="password" placeholder="••••••" autocomplete="new-password" required></label>` : ''}
-          ${S.authErr ? `<div class="form-err">${ic('alert', 'sm')}<span>${esc(S.authErr)}</span></div>` : ''}
-          <button class="btn primary lg block" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? '<span class="spin light"></span>' : ''}${reg ? 'إنشاء الحساب' : 'دخول'}</button>
-        </form>
-        <div class="auth-note">${ic('lock', 'sm')}<span>${MOCK ? 'وضع المعاينة: الحسابات والبيانات بتتحفظ على المتصفح ده بس.' : 'كلمة المرور بتتحفظ مشفّرة، والجلسة بتفضل شغالة 30 يوم على الجهاز ده.'}</span></div>
+      <div class="tabs" data-on="${S.authTab}" role="tablist">
+        <span class="ind"></span>
+        <button class="${reg ? '' : 'on'}" data-act="authTab" data-tab="login" role="tab" aria-selected="${!reg}">تسجيل الدخول</button>
+        <button class="${reg ? 'on' : ''}" data-act="authTab" data-tab="register" role="tab" aria-selected="${reg}">حساب جديد</button>
       </div>
-    </section>
+      <h2>${reg ? 'اعمل حسابك' : 'أهلاً بيك'}</h2>
+      <form data-form="${S.authTab}" autocomplete="on" novalidate>
+        <label class="field"><span>الاسم الثنائي</span>
+          <input class="input" name="name" value="${esc(reg ? '' : last)}" placeholder="مثال: أحمد علي" autocomplete="${reg ? 'name' : 'username'}" required dir="rtl">
+          ${reg ? '<small>الاسم الأول واسم العائلة — ده اللي هتدخل بيه</small>' : ''}</label>
+        <label class="field"><span>كلمة المرور</span>
+          <div class="input-wrap"><input class="input ltr" name="password" type="password" placeholder="••••••" autocomplete="${reg ? 'new-password' : 'current-password'}" required>
+          <button type="button" class="icon-btn" data-act="peek" aria-label="إظهار كلمة المرور">${ic('eye')}</button></div>
+          ${reg ? '<small>6 حروف أو أرقام على الأقل</small>' : ''}</label>
+        ${reg ? `<label class="field"><span>تأكيد كلمة المرور</span><input class="input ltr" name="confirm" type="password" placeholder="••••••" autocomplete="new-password" required></label>` : ''}
+        ${S.authErr ? `<div class="form-err">${ic('alert', 'sm')}<span>${esc(S.authErr)}</span></div>` : ''}
+        <button class="btn primary lg block" type="submit" ${S.busy ? 'disabled' : ''}>${S.busy ? '<span class="spin light"></span>' : ''}${reg ? 'إنشاء الحساب' : 'دخول'}</button>
+      </form>
+      ${MOCK ? `<div class="auth-note">${ic('info', 'sm')}<span>وضع المعاينة: الحسابات والبيانات بتتحفظ على المتصفح ده بس.</span></div>` : ''}
+    </div>
+    <p class="auth-foot">${esc(BRAND.faculty)} · ${esc(BRAND.university)}</p>
   </div>`;
 }
 async function submitAuth(form) {
@@ -197,13 +182,12 @@ function viewHome() {
   const stat = (icon, n, label, k) => `<div class="stat"><span class="si">${ic(icon, 'lg')}</span><div><b data-count="${n}">0</b><span>${label}</span></div></div>`;
   return `
     <section class="hero-band">
-      ${ecg()}
       <div class="txt">
-        <div class="hello">${ic('pulse', 'sm')}أهلاً يا ${esc(firstName(S.user.name))}</div>
+        <div class="hello">أهلاً يا ${esc(firstName(S.user.name))}</div>
         <h1>بنوك أسئلة مواد القسم</h1>
         <p>قسم ${esc(BRAND.department)} · ${termHtml(term())}</p>
       </div>
-      <div class="acts"><button class="btn white lg" data-act="newCourse">${ic('plus')}إضافة مادة</button></div>
+      <div class="acts"><button class="btn primary lg" data-act="newCourse">${ic('plus')}إضافة مادة</button></div>
     </section>
     <div class="stats">${stat('book', cs.length, 'مادة')}${stat('slides', tot('lectures'), 'محاضرة مرفوعة')}${stat('q', tot('questions'), 'سؤال محفوظ')}${stat('done', cs.filter(c => courseStatus(c)[0] === 'done').length, 'مادة مكتملة')}</div>
     <div class="section-head">
@@ -228,13 +212,13 @@ function coursesGrid() {
     const [st, stl] = courseStatus(c);
     const pct = c.target > 0 ? clamp(c.questions / c.target * 100, 0, 100) : (c.questions ? 100 : 0);
     const last = c.savedAt ? `آخر حفظ: ${esc(c.savedBy)} · ${ago(c.savedAt)}` : (c.createdBy ? `أضافها ${esc(c.createdBy)}` : '');
-    return `<button class="cc" data-act="openCourse" data-id="${c.id}" data-lv="${esc(c.level)}" style="animation-delay:${Math.min(i, 12) * 45}ms">
-      <div class="cc-top"><span class="code">${esc(c.code)}</span><span class="lv-chip">المستوى ${esc(c.level)}</span>${c.credits ? `<span class="chip" style="height:24px;font-size:12px">${c.credits} ساعات معتمدة</span>` : ''}<span class="spacer"></span><span class="status ${st}">${stl}</span></div>
+    return `<div class="cc-wrap" style="animation-delay:${Math.min(i, 12) * 45}ms"><button class="cc" data-act="openCourse" data-id="${c.id}" data-lv="${esc(c.level)}">
+      <div class="cc-top"><span class="code">${esc(c.code)}</span><span class="lv-chip">المستوى ${esc(c.level)}</span>${c.credits ? `<span class="chip" style="height:24px;font-size:12px">${c.credits} ساعات معتمدة</span>` : ''}<span class="spacer"></span><span class="status ${st}">${stl}</span><span class="cc-del-space"></span></div>
       <div class="cc-main"><h3 dir="auto">${esc(c.name)}</h3>
         <span class="ring"><svg viewBox="0 0 54 54"><circle class="bgc" cx="27" cy="27" r="22"/><circle class="fgc" cx="27" cy="27" r="22" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${C.toFixed(1)}" data-p="${pct}"/></svg><em>${Math.round(pct)}%</em></span></div>
       <div class="cc-meta"><span>${ic('slides', 'sm')}${nLec(c.lectures)}</span><span>${ic('q', 'sm')}${fmt(c.questions)} سؤال</span><span>${ic('check-circle', 'sm')}${fmt(c.approved)} معتمد</span></div>
       <div class="cc-foot"><span>${c.target > 0 ? `${fmt(c.questions)} من ${fmt(c.target)} المستهدف` : 'بدون عدد مستهدف'}</span><span>${last}</span></div>
-    </button>`;
+    </button><button class="icon-btn bad cc-del" data-act="delCourse" data-id="${c.id}" title="حذف المادة" aria-label="حذف المادة ${esc(c.code)}">${ic('trash', 'sm')}</button></div>`;
   }).join('')}</div>`;
 }
 function afterHome() {
@@ -307,8 +291,8 @@ async function courseForm(c) {
 async function deleteCourse(c) {
   const v = await modal({
     title: 'حذف المادة ' + c.code,
-    body: `<p>هيتحذف كل حاجة تخص المادة: المحاضرات المرفوعة وبنك الأسئلة كله. ده مش هينفع يترجع.</p><label class="field" style="margin-top:14px"><span>اكتب كود المادة للتأكيد: <b class="mono ltr">${esc(c.code)}</b></span><input class="input ltr mono" data-conf></label>`,
-    actions: [{ label: 'إلغاء', value: null }, { label: 'حذف نهائي', kind: 'danger solid', validate: ov => ov.querySelector('[data-conf]').value.trim().toUpperCase() === c.code }]
+    body: `<p dir="auto"><b>${esc(c.name)}</b></p><p style="margin-top:8px">هتتحذف المادة ومعاها المحاضرات المرفوعة وبنك الأسئلة بتاعها. الحذف ده مش هينفع يترجع.</p>`,
+    actions: [{ label: 'إلغاء', value: null }, { label: 'حذف المادة', kind: 'danger solid', icon: 'trash', value: true }]
   });
   if (!v) return;
   try { await api('deleteCourse', { id: c.id }); S.dirty = false; toast('اتحذفت المادة'); S.courses = S.courses.filter(x => x.id !== c.id); goHome(); }
@@ -357,7 +341,8 @@ function viewCourse() {
 }
 function courseActs() {
   return `${S.dirty ? `<span class="dirty">تغييرات غير محفوظة</span><button class="btn primary sm" data-act="saveBank">${ic('save', 'sm')}حفظ البنك</button>` : (S.course.savedAt ? `<span class="muted" style="font-size:13px">آخر حفظ: ${esc(S.course.savedBy)} · ${ago(S.course.savedAt)}</span>` : '')}
-    <button class="btn sm" data-act="editCourse">${ic('edit', 'sm')}بيانات المادة</button>`;
+    <button class="btn sm" data-act="editCourse">${ic('edit', 'sm')}بيانات المادة</button>
+    <button class="btn sm danger" data-act="delCourse" data-id="${S.course.id}">${ic('trash', 'sm')}حذف المادة</button>`;
 }
 function stepsNav() {
   const done = { 1: S.lectures.length > 0, 2: S.bank.length > 0, 3: S.bank.length > 0 && S.bank.every(q => q.status === 'approved'), 4: !!S.course.savedAt && !S.dirty };
@@ -835,15 +820,15 @@ async function exportWord() {
   if (!list.length) return toast('مفيش أسئلة للتصدير' + (S.exp.approvedOnly ? ' (مفيش أسئلة معتمدة)' : ''), 'bad');
   try {
     const parts = [
-      wP([{ t: `${c.code} – ${c.name}`, b: true, sz: 34, color: '0B2545' }], { after: 40, bidi: false }),
-      wP([{ t: `${BRAND.departmentEn} · Question Bank · ${(S.app && S.app.termEn) || BRAND.termEn} · Level ${c.level}`, sz: 21, color: '0062B0' }], { after: 40, bidi: false }),
+      wP([{ t: `${c.code} – ${c.name}`, b: true, sz: 34, color: '16211F' }], { after: 40, bidi: false }),
+      wP([{ t: `${BRAND.departmentEn} · Question Bank · ${(S.app && S.app.termEn) || BRAND.termEn} · Level ${c.level}`, sz: 21, color: '0F766E' }], { after: 40, bidi: false }),
       wP([{ t: `Total: ${list.length} questions · Exported ${new Date().toLocaleDateString('en-GB')} by ${S.user.name}`, sz: 18, color: '7A8899' }], { after: 240, bidi: false })
     ];
     let n = 0, lastLec = null; const key = [];
     for (const q of list) {
       if (q.lectureId !== lastLec) {
         lastLec = q.lectureId; const l = lecById(q.lectureId);
-        parts.push(wP([{ t: l ? `Lecture ${l.num}: ${l.title}` : 'Other questions', b: true, sz: 26, color: '0062B0' }], { before: 240, after: 120, keep: true, style: 'Heading2' }));
+        parts.push(wP([{ t: l ? `Lecture ${l.num}: ${l.title}` : 'Other questions', b: true, sz: 26, color: '0F766E' }], { before: 240, after: 120, keep: true, style: 'Heading2' }));
       }
       n++;
       const t = cfgType(q.type), lv = cfgLevel(q.difficulty);
@@ -861,7 +846,7 @@ async function exportWord() {
     }
     if (mode === 'key') {
       parts.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
-      parts.push(wP([{ t: 'Answer Key', b: true, sz: 28, color: '0B2545' }], { after: 160, style: 'Heading1' }));
+      parts.push(wP([{ t: 'Answer Key', b: true, sz: 28, color: '16211F' }], { after: 160, style: 'Heading1' }));
       parts.push(wTable([['Q', 'Answer', 'Lecture', 'Type', 'Difficulty'], ...key], [900, 1100, 1100, 2600, 1700]));
       parts.push(wP('', { after: 0 }));
     }
@@ -904,6 +889,7 @@ const ACT = {
   newCourse: () => courseForm(null),
   editCourse: () => courseForm(S.course),
   openCourse: el => openCourse(el.dataset.id),
+  delCourse: el => { const c = S.courses.find(x => x.id === el.dataset.id) || S.course; if (c) deleteCourse(c); },
   go: el => { S.step = +el.dataset.step; S.editing = null; refreshCourse(['steps', 'step']); window.scrollTo({ top: 0, behavior: 'smooth' }); },
   previewLec: el => previewLecture(el.closest('[data-id]').dataset.id),
   delLec: el => deleteLecture(el.closest('[data-id]').dataset.id),

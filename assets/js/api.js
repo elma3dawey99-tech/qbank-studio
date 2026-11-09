@@ -38,7 +38,7 @@ const MOCK_CONFIG = {
   types: [{ id: 'mcq', label: 'اختيار من متعدد', en: 'MCQ', options: 4, share: 60 }, { id: 'tf', label: 'صح وخطأ', en: 'True / False', options: 2, share: 20 }, { id: 'case', label: 'حالة إكلينيكية', en: 'Case-based MCQ', options: 4, share: 20 }],
   levels: [{ id: 'easy', label: 'سهل', en: 'Easy', share: 30 }, { id: 'medium', label: 'متوسط', en: 'Medium', share: 50 }, { id: 'hard', label: 'صعب', en: 'Hard', share: 20 }]
 };
-const MOCK_APP = { name: 'QBank Studio', title: 'بنوك الأسئلة', department: 'تكنولوجيا الطوارئ والرعاية الحرجة', departmentEn: 'Emergency & Critical Care Technology', faculty: 'كلية تكنولوجيا العلوم الصحية التطبيقية', university: 'جامعة الدلتا للعلوم والتكنولوجيا', term: 'خريف 2026–2027', termEn: 'Fall 2026–2027', rev: 2, preview: true };
+const MOCK_APP = { name: 'بنوك الأسئلة', title: 'بنوك الأسئلة', department: 'تكنولوجيا الطوارئ والرعاية الحرجة', departmentEn: 'Emergency & Critical Care Technology', faculty: 'كلية تكنولوجيا العلوم الصحية التطبيقية', university: 'جامعة الدلتا للعلوم والتكنولوجيا', term: 'خريف 2026–2027', termEn: 'Fall 2026–2027', rev: 2, preview: true };
 const KEY = 'qb_mock_v2';
 let db = null;
 const load = () => { if (db) return db; try { db = JSON.parse(localStorage.getItem(KEY)); } catch (e) { } db = db || { users: [], courses: [], lectures: [], texts: {}, questions: [] }; return db; };

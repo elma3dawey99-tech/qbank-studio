@@ -3,7 +3,6 @@ export const API_URL = 'https://script.google.com/macros/s/AKfycbwqg6jDW2RTdDaOG
 
 export const BRAND = {
   appName: 'بنوك الأسئلة',
-  appEn: 'QBank Studio',
   department: 'تكنولوجيا الطوارئ والرعاية الحرجة',
   departmentEn: 'Emergency & Critical Care Technology',
   faculty: 'كلية تكنولوجيا العلوم الصحية التطبيقية',

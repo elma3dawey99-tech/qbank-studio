@@ -1,5 +1,5 @@
 /**
- * QBank Studio — backend API (Google Apps Script)
+ * بنوك الأسئلة — backend API (Google Apps Script)
  * Emergency & Critical Care Technology Department — Faculty of Applied Health Sciences Technology,
  * Delta University for Science and Technology. Designed by Youssef Mahrous Elmaadawy.
  *
@@ -13,7 +13,7 @@
 var FRONTEND_URL = 'https://elma3dawey99-tech.github.io/qbank-studio/';
 
 var APP = {
-  name: 'QBank Studio',
+  name: 'بنوك الأسئلة',
   title: 'بنوك الأسئلة',
   department: 'تكنولوجيا الطوارئ والرعاية الحرجة',
   departmentEn: 'Emergency & Critical Care Technology',
@@ -91,7 +91,7 @@ var CATALOG = [
 function doGet(e) {
   if (e && e.parameter && e.parameter.action === 'ping') return json_({ ok: true, data: { app: APP.name, rev: APP.rev, time: Date.now() } });
   return HtmlService.createHtmlOutputFromFile('Index')
-    .setTitle('بنوك الأسئلة · QBank Studio')
+    .setTitle('بنوك الأسئلة')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
 
