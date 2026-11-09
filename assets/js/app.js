@@ -213,7 +213,7 @@ function coursesGrid() {
     const pct = c.target > 0 ? clamp(c.questions / c.target * 100, 0, 100) : (c.questions ? 100 : 0);
     const last = c.savedAt ? `آخر حفظ: ${esc(c.savedBy)} · ${ago(c.savedAt)}` : (c.createdBy ? `أضافها ${esc(c.createdBy)}` : '');
     return `<div class="cc-wrap" style="animation-delay:${Math.min(i, 12) * 45}ms"><button class="cc" data-act="openCourse" data-id="${c.id}" data-lv="${esc(c.level)}">
-      <div class="cc-top"><span class="code">${esc(c.code)}</span><span class="lv-chip">المستوى ${esc(c.level)}</span>${c.credits ? `<span class="chip" style="height:24px;font-size:12px">${c.credits} ساعات معتمدة</span>` : ''}<span class="spacer"></span><span class="status ${st}">${stl}</span><span class="cc-del-space"></span></div>
+      <div class="cc-top"><span class="code">${esc(c.code)}</span><span class="lv-chip">المستوى ${esc(c.level)}</span><span class="spacer"></span><span class="status ${st}">${stl}</span><span class="cc-del-space"></span></div>
       <div class="cc-main"><h3 dir="auto">${esc(c.name)}</h3>
         <span class="ring"><svg viewBox="0 0 54 54"><circle class="bgc" cx="27" cy="27" r="22"/><circle class="fgc" cx="27" cy="27" r="22" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${C.toFixed(1)}" data-p="${pct}"/></svg><em>${Math.round(pct)}%</em></span></div>
       <div class="cc-meta"><span>${ic('slides', 'sm')}${nLec(c.lectures)}</span><span>${ic('q', 'sm')}${fmt(c.questions)} سؤال</span><span>${ic('check-circle', 'sm')}${fmt(c.approved)} معتمد</span></div>
@@ -820,15 +820,15 @@ async function exportWord() {
   if (!list.length) return toast('مفيش أسئلة للتصدير' + (S.exp.approvedOnly ? ' (مفيش أسئلة معتمدة)' : ''), 'bad');
   try {
     const parts = [
-      wP([{ t: `${c.code} – ${c.name}`, b: true, sz: 34, color: '16211F' }], { after: 40, bidi: false }),
-      wP([{ t: `${BRAND.departmentEn} · Question Bank · ${(S.app && S.app.termEn) || BRAND.termEn} · Level ${c.level}`, sz: 21, color: '0F766E' }], { after: 40, bidi: false }),
+      wP([{ t: `${c.code} – ${c.name}`, b: true, sz: 34, color: '0B2545' }], { after: 40, bidi: false }),
+      wP([{ t: `${BRAND.departmentEn} · Question Bank · ${(S.app && S.app.termEn) || BRAND.termEn} · Level ${c.level}`, sz: 21, color: '0062B0' }], { after: 40, bidi: false }),
       wP([{ t: `Total: ${list.length} questions · Exported ${new Date().toLocaleDateString('en-GB')} by ${S.user.name}`, sz: 18, color: '7A8899' }], { after: 240, bidi: false })
     ];
     let n = 0, lastLec = null; const key = [];
     for (const q of list) {
       if (q.lectureId !== lastLec) {
         lastLec = q.lectureId; const l = lecById(q.lectureId);
-        parts.push(wP([{ t: l ? `Lecture ${l.num}: ${l.title}` : 'Other questions', b: true, sz: 26, color: '0F766E' }], { before: 240, after: 120, keep: true, style: 'Heading2' }));
+        parts.push(wP([{ t: l ? `Lecture ${l.num}: ${l.title}` : 'Other questions', b: true, sz: 26, color: '0062B0' }], { before: 240, after: 120, keep: true, style: 'Heading2' }));
       }
       n++;
       const t = cfgType(q.type), lv = cfgLevel(q.difficulty);
@@ -846,7 +846,7 @@ async function exportWord() {
     }
     if (mode === 'key') {
       parts.push('<w:p><w:r><w:br w:type="page"/></w:r></w:p>');
-      parts.push(wP([{ t: 'Answer Key', b: true, sz: 28, color: '16211F' }], { after: 160, style: 'Heading1' }));
+      parts.push(wP([{ t: 'Answer Key', b: true, sz: 28, color: '0B2545' }], { after: 160, style: 'Heading1' }));
       parts.push(wTable([['Q', 'Answer', 'Lecture', 'Type', 'Difficulty'], ...key], [900, 1100, 1100, 2600, 1700]));
       parts.push(wP('', { after: 0 }));
     }
