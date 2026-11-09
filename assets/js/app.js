@@ -1,4 +1,5 @@
 import { BRAND } from './config.js';
+import { needZip } from './lib.js';
 import { CATALOG, LEVELS, byCode } from './catalog.js';
 import { call, setToken, MOCK } from './api.js';
 import {
@@ -664,6 +665,7 @@ function step4() {
           <div class="exp-btns">
             <button class="btn lg" data-act="exportWord" ${n ? '' : 'disabled'}>${ic('word')}ملف Word</button>
             <button class="btn lg" data-act="exportExcel" ${n ? '' : 'disabled'}>${ic('sheet')}ملف Excel</button>
+            <button class="btn lg primary" data-act="exportControl" ${n ? '' : 'disabled'}>${ic('sheet')}ملف الكنترول</button>
           </div>
         </div>
       </div>
@@ -959,6 +961,50 @@ async function exportExcel() {
   } catch (e) { toast('تعذّر تجهيز ملف Excel: ' + e.message, 'bad'); }
 }
 
+/* Control-office file: fills the university template as-is (only C, D, H–K, M, N written per row; the rest repeat row 2). */
+const xmlEsc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+async function exportControl() {
+  const list = exportList(); if (!list.length) return toast('مفيش أسئلة للتصدير', 'bad');
+  try {
+    const JSZip = await needZip();
+    const zip = await JSZip.loadAsync(await (await fetch('assets/templates/control-template.xls')).arrayBuffer());
+    const sheetPath = 'xl/worksheets/sheet1.xml', sstPath = 'xl/sharedStrings.xml';
+    let sheet = await zip.file(sheetPath).async('string'), sst = await zip.file(sstPath).async('string');
+    const strs = [...sst.matchAll(/<si>([\s\S]*?)<\/si>/g)].map(m => m[1]);
+    const text = si => (si.match(/<t[^>]*>([\s\S]*?)<\/t>/g) || []).map(t => t.replace(/<[^>]+>/g, '')).join('');
+    const idx = new Map(strs.map((si, i) => [text(si), i]));
+    let added = 0, uses = 0;
+    const sid = v => { v = String(v); uses++; if (!idx.has(v)) { idx.set(v, strs.length); strs.push(`<t xml:space="preserve">${xmlEsc(v)}</t>`); added++; } return idx.get(v); };
+    const rowRe = r => new RegExp(`<row r="${r}"[^>]*>([\\s\\S]*?)</row>`);
+    const row2 = sheet.match(rowRe(2))[1];
+    const cellOf = (rowXml, col, r) => { const m = rowXml.match(new RegExp(`<c r="${col}${r}"[^>]*?(?:/>|>[\\s\\S]*?</c>)`)); return m ? m[0] : null; };
+    const valOf = col => { const c = cellOf(row2, col, 2); const v = c && c.match(/<v>(\d+)<\/v>/); return v ? text(strs[+v[1]]) : ''; };
+    const repeat = Object.fromEntries(['A', 'B', 'E', 'F', 'G'].map(c => [c, valOf(c)]));
+    const maxRow = Math.max(...[...sheet.matchAll(/<row r="(\d+)"/g)].map(m => +m[1]));
+    if (list.length > maxRow - 1) return toast(`الملف بياخد ${maxRow - 1} سؤال بس`, 'bad');
+    const COLS = 'ABCDEFGHIJKLMN'.split('');
+    list.forEach((q, i) => {
+      const r = i + 2, m = sheet.match(rowRe(r)); if (!m) return;
+      const opts = q.type === 'tf' ? ['True', 'False'] : q.options;
+      const vals = { ...repeat, C: q.stem, D: cfgLevel(q.difficulty).en, H: opts[0], I: opts[1], J: opts[2], K: opts[3], L: opts[4], M: LETTERS[q.answer], N: 1 };
+      const cells = COLS.map(col => {
+        const old = cellOf(m[1], col, r), st = old && old.match(/ s="(\d+)"/), sAttr = st ? ` s="${st[1]}"` : '';
+        const v = vals[col];
+        if (v == null || v === '') return old ? `<c r="${col}${r}"${sAttr}/>` : '';
+        if (col === 'N') return `<c r="${col}${r}"${sAttr}><v>${v}</v></c>`;
+        return `<c r="${col}${r}"${sAttr} t="s"><v>${sid(v)}</v></c>`;
+      }).join('');
+      sheet = sheet.replace(m[0], m[0].replace(m[1], cells));
+    });
+    const baseCount = +(sst.match(/count="(\d+)"/) || [0, 0])[1];
+    sst = sst.replace(/<sst([^>]*)>[\s\S]*<\/sst>/, (all, attrs) => `<sst${attrs.replace(/count="\d+"/, `count="${baseCount + uses}"`).replace(/uniqueCount="\d+"/, `uniqueCount="${strs.length}"`)}>${strs.map(x => `<si>${x}</si>`).join('')}</sst>`);
+    zip.file(sheetPath, sheet, { createFolders: false }); zip.file(sstPath, sst, { createFolders: false });
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.ms-excel' });
+    downloadBlob(blob, `${S.course.code} Questions.xls`);
+    toast(`اتجهز ملف الكنترول — ${list.length} سؤال`);
+  } catch (e) { toast('تعذّر تجهيز ملف الكنترول: ' + e.message, 'bad'); }
+}
+
 /* ---------------- events ---------------- */
 const ACT = {
   authTab: el => { S.authTab = el.dataset.tab; S.authErr = ''; render(); },
@@ -1015,7 +1061,8 @@ const ACT = {
   addQ: () => addQuestion(),
   saveBank: () => saveBank(),
   exportWord: () => exportWord(),
-  exportExcel: () => exportExcel()
+  exportExcel: () => exportExcel(),
+  exportControl: () => exportControl()
 };
 document.addEventListener('click', e => {
   if (S.menu && !e.target.closest('.menu') && !e.target.closest('[data-act=menu]')) { S.menu = false; const h = document.querySelector('.topbar'); if (h) h.outerHTML = topbar(); }
