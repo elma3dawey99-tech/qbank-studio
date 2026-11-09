@@ -10,7 +10,7 @@
  * Phase 1: generation returns clearly-marked demo questions until CONFIG.rules + the AI engine are added.
  */
 
-var FRONTEND_URL = 'https://elma3dawey99-tech.github.io/qbank-studio/';
+var FRONTEND_URL = 'https://ecc-qbank.pages.dev/';
 
 var APP = {
   name: 'بنوك الأسئلة',
