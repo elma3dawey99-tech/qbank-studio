@@ -128,6 +128,11 @@ function json_(obj) {
 
 /* ===================== API ===================== */
 var API = {
+  status: function () {
+    db_();
+    return { registrationOpen: rows_('Users').length === 0 };
+  },
+
   register: function (a) {
     var name = cleanName_(a.name), pw = String(a.password == null ? '' : a.password);
     if (!validName_(name)) fail_('input', 'اكتب اسمك الثنائي (الاسم الأول واسم العائلة)');
@@ -137,6 +142,7 @@ var API = {
     var user = withLock_(function () {
       var key = nameKey_(name);
       var users = rows_('Users');
+      if (users.length) fail_('closed', 'الأداة مقفولة على حساب واحد — ادخل من "تسجيل الدخول"');
       if (users.some(function (u) { return u.nameKey === key; })) fail_('dup', 'الاسم ده متسجّل قبل كده — لو ده حسابك ادخل من "تسجيل الدخول"');
       var salt = hex_(32);
       var rec = {
@@ -248,14 +254,16 @@ var API = {
   addLecture: function (a, tok) {
     var u = auth_(tok);
     var courseId = str_(a.courseId, 40);
+    var imported = a.imported === true;
     var text = String(a.text || '').slice(0, CONFIG.maxLectureChars);
-    if (text.replace(/\s/g, '').length < 20) fail_('input', 'الملف ده مفيهوش نص كفاية');
+    if (imported && !text) text = '(This lecture was added from an imported question file. Its text was not uploaded to the tool.)';
+    if (!imported && text.replace(/\s/g, '').length < 20) fail_('input', 'الملف ده مفيهوش نص كفاية');
     var rec = {
       id: 'l_' + hex_(12), courseId: courseId,
       num: String(int_(a.num, 1, 99)),
       title: str_(a.title, 200) || 'Lecture',
       fileName: str_(a.fileName, 200),
-      kind: ['pptx', 'pdf', 'docx'].indexOf(a.kind) >= 0 ? a.kind : 'pdf',
+      kind: imported ? 'import' : ['pptx', 'pdf', 'docx'].indexOf(a.kind) >= 0 ? a.kind : 'pdf',
       units: String(int_(a.units, 0, 5000)),
       words: String(int_(a.words, 0, 2000000)),
       uploadedBy: u.name, uploadedAt: String(Date.now())
@@ -359,7 +367,7 @@ var API = {
         answer: String(int_(q.answer, 0, Math.max(0, opts.length - 1))),
         explanation: str_(q.explanation, 4000),
         status: q.status === 'approved' ? 'approved' : 'draft',
-        source: ['demo', 'ai', 'manual'].indexOf(q.source) >= 0 ? q.source : 'manual',
+        source: ['demo', 'ai', 'manual', 'import'].indexOf(q.source) >= 0 ? q.source : 'manual',
         createdBy: str_(q.createdBy, 60) || u.name,
         updatedAt: now
       };

@@ -74,7 +74,9 @@ function mock(action, a) {
   const d = load();
   const out = (() => {
     switch (action) {
+      case 'status': return { registrationOpen: !d.users.length };
       case 'register': {
+        if (d.users.length) fail('closed', 'الأداة مقفولة على حساب واحد — ادخل من "تسجيل الدخول"');
         const name = cleanName(a.name), pw = String(a.password || '');
         if (!validName(name)) fail('input', 'اكتب اسمك الثنائي (الاسم الأول واسم العائلة)');
         if (pw.length < 6) fail('input', 'كلمة المرور لازم تكون 6 حروف أو أرقام على الأقل');
@@ -114,7 +116,7 @@ function mock(action, a) {
       case 'listLectures': authed(); return d.lectures.filter(l => l.courseId === a.courseId).sort((x, y) => x.num - y.num);
       case 'addLecture': {
         const u = authed();
-        const rec = { id: id('l_'), courseId: a.courseId, num: Math.round(+a.num || 1), title: a.title, fileName: a.fileName, kind: a.kind, units: a.units, words: a.words, uploadedBy: u.name, uploadedAt: Date.now() };
+        const rec = { id: id('l_'), courseId: a.courseId, num: Math.round(+a.num || 1), title: a.title, fileName: a.fileName, kind: a.imported ? 'import' : a.kind, units: a.units, words: a.words, uploadedBy: u.name, uploadedAt: Date.now() };
         d.lectures.push(rec); d.texts[rec.id] = String(a.text || '').slice(0, 200000); persist(); return rec;
       }
       case 'updateLecture': {

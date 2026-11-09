@@ -123,7 +123,7 @@ function footer() {
 
 /* ---------------- view: auth ---------------- */
 function viewAuth() {
-  const reg = S.authTab === 'register', last = store('qb_name') || '';
+  const reg = S.regOpen === true, last = store('qb_name') || '';
   return `<div class="auth">
     <div class="auth-card">
       <div class="auth-brand">
@@ -132,13 +132,9 @@ function viewAuth() {
         <p>قسم ${esc(BRAND.department)}</p>
         <span class="chip term">${ic('calendar', 'sm')}${termHtml(term())}</span>
       </div>
-      <div class="tabs" data-on="${S.authTab}" role="tablist">
-        <span class="ind"></span>
-        <button class="${reg ? '' : 'on'}" data-act="authTab" data-tab="login" role="tab" aria-selected="${!reg}">تسجيل الدخول</button>
-        <button class="${reg ? 'on' : ''}" data-act="authTab" data-tab="register" role="tab" aria-selected="${reg}">حساب جديد</button>
-      </div>
       <h2>${reg ? 'اعمل حسابك' : 'أهلاً بيك'}</h2>
-      <form data-form="${S.authTab}" autocomplete="on" novalidate>
+      ${reg ? '<p class="lead">أول مرة بس — الأداة هتتقفل على الحساب ده.</p>' : ''}
+      <form data-form="${reg ? 'register' : 'login'}" autocomplete="on" novalidate>
         <label class="field"><span>الاسم الثنائي</span>
           <input class="input" name="name" value="${esc(reg ? '' : last)}" placeholder="مثال: أحمد علي" autocomplete="${reg ? 'name' : 'username'}" required dir="rtl">
           ${reg ? '<small>الاسم الأول واسم العائلة — ده اللي هتدخل بيه</small>' : ''}</label>
@@ -167,7 +163,7 @@ async function submitAuth(form) {
   const f = $('[data-form]'); if (f) { f.name.value = name; f.password.value = pw; if (f.confirm && form.confirm) f.confirm.value = form.confirm.value; }
   try {
     const r = await call(mode, { name, password: pw });
-    store('qb_name', name); store('qb_token', r.token); setToken(r.token);
+    store('qb_name', name); store('qb_token', r.token); setToken(r.token); S.regOpen = false;
     Object.assign(S, { user: r.user, app: r.app, config: r.config, busy: false });
     if (mode === 'register') toast(`أهلاً يا ${firstName(r.user.name)} — اتعمل حسابك`);
     goHome();
@@ -343,11 +339,13 @@ function viewCourse() {
         <div class="sub"><span>${ic('building', 'sm')}${esc(BRAND.department)}</span>${cat ? `<span>${ic('book', 'sm')}${cat.cr} ساعات معتمدة</span>` : ''}${c.target ? `<span>${ic('q', 'sm')}المستهدف ${fmt(c.target)} سؤال</span>` : ''}</div></div>
       <div class="acts" id="course-acts">${courseActs()}</div>
     </div>
+    <input type="file" id="imp-in" accept=".xlsx,.xls,.csv,.json" hidden>
     <nav class="steps" id="steps">${stepsNav()}</nav>
     <section id="step">${stepBody()}</section>`;
 }
 function courseActs() {
   return `${S.dirty ? `<span class="dirty">تغييرات غير محفوظة</span><button class="btn primary sm" data-act="saveBank">${ic('save', 'sm')}حفظ البنك</button>` : (S.course.savedAt ? `<span class="muted" style="font-size:13px">آخر حفظ: ${esc(S.course.savedBy)} · ${ago(S.course.savedAt)}</span>` : '')}
+    <button class="btn sm" data-act="importQ">${ic('upload', 'sm')}استيراد أسئلة</button>
     <button class="btn sm" data-act="editCourse">${ic('edit', 'sm')}بيانات المادة</button>
     <button class="btn sm danger" data-act="delCourse" data-id="${S.course.id}">${ic('trash', 'sm')}حذف المادة</button>`;
 }
@@ -392,7 +390,7 @@ function lecRow(l) {
     <span class="ft ft-${l.kind}">${l.kind.toUpperCase()}</span>
     <input class="input num" type="number" min="1" max="99" value="${l.num}" data-lec="num" aria-label="رقم المحاضرة">
     <input class="input" value="${esc(l.title)}" data-lec="title" dir="auto" aria-label="عنوان المحاضرة" title="${esc(l.fileName)}">
-    <span class="lec-stats"><span>${fmt(l.units)} ${unit}</span><span>${fmt(l.words)} كلمة</span>${l.words < 150 ? `<span class="warn-tag">${ic('alert', 'sm')}نص قليل</span>` : ''}</span>
+    <span class="lec-stats">${l.kind === 'import' ? '<span>اتضافت من ملف أسئلة مستورد</span>' : `<span>${fmt(l.units)} ${unit}</span><span>${fmt(l.words)} كلمة</span>${l.words < 150 ? `<span class="warn-tag">${ic('alert', 'sm')}نص قليل</span>` : ''}`}</span>
     <span class="lec-acts"><button class="icon-btn" data-act="previewLec" title="عرض النص المستخرج" aria-label="عرض النص">${ic('eye')}</button><button class="icon-btn bad" data-act="delLec" title="حذف" aria-label="حذف">${ic('trash')}</button></span>
   </div>`;
 }
@@ -569,7 +567,7 @@ function step3() {
       <button class="btn sm" data-act="approveShown">${ic('check-circle', 'sm')}اعتماد الظاهر</button>
       <button class="btn sm" data-act="addQ">${ic('plus', 'sm')}سؤال يدوي</button>
     </div>
-    <div id="qlist">${qListHtml()}</div>` : (S.gen ? '' : `<div class="empty"><span class="em-ico">${ic('spark', 'xl')}</span><h3>لسه مفيش أسئلة</h3><p>حدد العدد والتوزيع من الخطوة اللي فاتت واضغط "توليد الأسئلة".</p><button class="btn primary" data-act="go" data-step="2">${ic('back')}عدد الأسئلة</button></div>`)}
+    <div id="qlist">${qListHtml()}</div>` : (S.gen ? '' : `<div class="empty"><span class="em-ico">${ic('spark', 'xl')}</span><h3>لسه مفيش أسئلة</h3><p>استورد ملف الأسئلة اللي جهّزه Claude، أو ولّد من خطوة "عدد الأسئلة".</p><div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap"><button class="btn primary" data-act="importQ">${ic('upload')}استيراد أسئلة</button><button class="btn" data-act="go" data-step="2">${ic('back')}عدد الأسئلة</button></div></div>`)}
     <div class="step-nav"><button class="btn" data-act="go" data-step="2">${ic('back')}عدد الأسئلة</button><button class="btn primary" data-act="go" data-step="4" ${S.bank.length ? '' : 'disabled'}>التالي: الحفظ والتصدير${ic('next')}</button></div>`;
 }
 function genHtml() {
@@ -602,7 +600,7 @@ function qCard(q, n, i = 0) {
   const t = cfgType(q.type), lv = cfgLevel(q.difficulty), l = lecById(q.lectureId);
   return `<article class="card q ${q.status === 'approved' ? 'approved' : ''}" data-id="${q.id}" style="animation-delay:${Math.min(i, 10) * 25}ms">
     <div class="q-h"><span class="qn">${n}</span><span class="tag type">${esc(t.label)}</span><span class="tag ${esc(q.difficulty)}">${esc(lv.label)}</span><span class="tag bloom">${esc(cfgBloom(q.bloom).label)}</span>
-      <span class="tag" title="${esc(lecName(q.lectureId))}">${l ? 'محاضرة ' + l.num : 'محاضرة محذوفة'}</span>${q.source === 'demo' ? '<span class="tag demo">تجريبي</span>' : ''}${q.source === 'manual' ? '<span class="tag">يدوي</span>' : ''}
+      <span class="tag" title="${esc(lecName(q.lectureId))}">${l ? 'محاضرة ' + l.num : 'محاضرة محذوفة'}</span>${q.source === 'demo' ? '<span class="tag demo">تجريبي</span>' : ''}${q.source === 'manual' ? '<span class="tag">يدوي</span>' : ''}${q.source === 'import' ? '<span class="tag">مستورد</span>' : ''}
       <span class="q-acts">
         <button class="icon-btn ${q.status === 'approved' ? 'on' : ''}" data-act="approveQ" title="${q.status === 'approved' ? 'إلغاء الاعتماد' : 'اعتماد'}" aria-label="اعتماد">${ic('check-circle')}</button>
         <button class="icon-btn" data-act="editQ" title="تعديل" aria-label="تعديل">${ic('edit')}</button>
@@ -828,6 +826,77 @@ async function saveBank() {
   } catch (e) { toast(e.message, 'bad', 5000); return false; }
 }
 
+/* ---------------- import (questions prepared outside the tool) ---------------- */
+const pick = (row, ...keys) => { for (const k of keys) { const hit = Object.keys(row).find(x => x.trim().toLowerCase() === k); if (hit != null && String(row[hit]).trim() !== '') return String(row[hit]).trim(); } return ''; };
+function matchCfg(list, v, fallback) {
+  const t = String(v || '').trim().toLowerCase().replace(/[\s_\-\/]+/g, '');
+  if (!t) return fallback;
+  const hit = list.find(x => [x.id, x.en, x.label].some(y => String(y).toLowerCase().replace(/[\s_\-\/]+/g, '') === t))
+    || list.find(x => String(x.en).toLowerCase().replace(/[\s_\-\/]+/g, '').startsWith(t) || t.startsWith(String(x.id)));
+  return hit ? hit.id : fallback;
+}
+function parseImportRow(r, i) {
+  const err = m => ({ err: `صف ${i + 2}: ${m}` });
+  const stem = pick(r, 'question', 'stem', 'السؤال');
+  if (!stem) return err('مفيش نص سؤال');
+  const type = matchCfg(S.config.types, pick(r, 'type', 'النوع'), 'mcq');
+  let options = Array.isArray(r.options) ? r.options.map(String).filter(Boolean) : [...LETTERS].slice(0, 6).map(L => pick(r, L.toLowerCase())).filter(Boolean);
+  if (type === 'tf') options = ['True', 'False'];
+  if (options.length < 2) return err('لازم اختيارين على الأقل');
+  const a = pick(r, 'answer', 'الإجابة');
+  let answer = -1;
+  if (/^\d+$/.test(a) && Array.isArray(r.options)) answer = +a;
+  else if (type === 'tf') answer = /^(t|true|a|صح)$/i.test(a) ? 0 : /^(f|false|b|خطأ|خطا)$/i.test(a) ? 1 : -1;
+  else if (/^[a-f]$/i.test(a)) answer = LETTERS.indexOf(a.toUpperCase());
+  else answer = options.findIndex(o => o.toLowerCase() === a.toLowerCase());
+  if (answer < 0 || answer >= options.length) return err('الإجابة الصحيحة مش واضحة');
+  const num = toInt(pick(r, 'lecture', 'lecture no', 'lecture number', 'المحاضرة'), 0);
+  if (num < 1) return err('رقم المحاضرة ناقص');
+  return { num, title: pick(r, 'lecture title', 'عنوان المحاضرة') || ('Lecture ' + num), q: {
+    type, difficulty: matchCfg(S.config.levels, pick(r, 'difficulty', 'الصعوبة'), 'easy'),
+    bloom: type === 'case' ? 'apply' : matchCfg(S.config.blooms, pick(r, 'thinking', 'bloom', 'cognitive level', 'مستوى التفكير'), 'recall'),
+    stem, options, answer, explanation: pick(r, 'explanation', 'rationale', 'التفسير'), source: 'import', status: 'draft'
+  } };
+}
+async function readImportFile(file) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith('.json')) { const j = JSON.parse(await file.text()); return Array.isArray(j) ? j : (j.questions || []); }
+  if (!window.XLSX) await loadScript(LIBS.xlsx);
+  const wb = window.XLSX.read(await file.arrayBuffer(), { type: 'array' });
+  return window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+}
+async function importQuestions(file) {
+  if (!file || !S.course) return;
+  let rows;
+  try { rows = await readImportFile(file); } catch (e) { return toast('تعذّر قراءة الملف: ' + e.message, 'bad', 5000); }
+  const parsed = rows.map(parseImportRow), ok = parsed.filter(x => !x.err), bad = parsed.filter(x => x.err);
+  if (!ok.length) return toast(bad.length ? bad[0].err : 'الملف فاضي', 'bad', 6000);
+  const nums = [...new Set(ok.map(x => x.num))].sort((a, b) => a - b);
+  const missing = nums.filter(n => !S.lectures.some(l => l.num === n));
+  const old = S.bank.filter(q => nums.some(n => { const l = S.lectures.find(x => x.num === n); return l && q.lectureId === l.id; })).length;
+  const body = `<p>لقيت <b>${ok.length}</b> سؤال في ${nLec(nums.length)} (${nums.join('، ')}).</p>
+    ${missing.length ? `<p class="muted" style="margin-top:6px">هتتضاف محاضرات جديدة للمادة بالأرقام: ${missing.join('، ')}.</p>` : ''}
+    ${bad.length ? `<p style="margin-top:6px;color:var(--bad)">${bad.length} صف مش صالح هيتساب — أولهم: ${esc(bad[0].err)}</p>` : ''}
+    ${old ? `<p style="margin-top:6px">البنك فيه ${old} سؤال من نفس المحاضرات.</p>` : ''}`;
+  const actions = [{ label: 'إلغاء', value: null }];
+  if (old) actions.push({ label: 'إضافة عليهم', value: 'add' }, { label: 'استبدال', value: 'replace', kind: 'primary' });
+  else actions.push({ label: 'استيراد', value: 'add', kind: 'primary', icon: 'upload' });
+  const v = await modal({ title: 'استيراد أسئلة', body, actions }); if (!v) return;
+  try {
+    for (const n of missing) {
+      const r = ok.find(x => x.num === n);
+      const lec = await api('addLecture', { courseId: S.course.id, num: n, title: r.title, fileName: file.name, kind: 'import', units: 0, words: 0, text: '', imported: true });
+      S.lectures.push(lec);
+    }
+    S.lectures.sort((a, b) => a.num - b.num);
+    const ids = new Map(S.lectures.map(l => [l.num, l.id]));
+    if (v === 'replace') { const drop = new Set(nums.map(n => ids.get(n))); S.bank = S.bank.filter(q => !drop.has(q.lectureId)); }
+    ok.forEach(x => S.bank.push(normQ(Object.assign({ id: uid('q_'), lectureId: ids.get(x.num) }, x.q))));
+    S.step = 3; S.filters = EMPTY_FILTERS(); setDirty(true); refreshCourse();
+    await saveBank();
+  } catch (e) { toast(e.message, 'bad', 5000); }
+}
+
 /* ---------------- export ---------------- */
 const exportList = () => sortedBank().filter(q => q.stem && (!S.exp.approvedOnly || q.status === 'approved'));
 const fileBase = () => `${S.course.code} - Question Bank - ${((S.app && S.app.termEn) || BRAND.termEn).replace('–', '-')}`.replace(/[\\/:*?"<>|]/g, ' ');
@@ -904,6 +973,7 @@ const ACT = {
   homeLv: el => { S.homeLv = +el.dataset.lv; document.querySelectorAll('.section-head .seg button').forEach(b => b.classList.toggle('on', b === el)); $('#courses').innerHTML = coursesGrid(); animateRings(); },
   newCourse: () => courseForm(null),
   editCourse: () => courseForm(S.course),
+  importQ: () => { const i = $('#imp-in'); if (i) { i.value = ''; i.click(); } },
   openCourse: el => openCourse(el.dataset.id),
   delCourse: el => { const c = S.courses.find(x => x.id === el.dataset.id) || S.course; if (c) deleteCourse(c); },
   go: el => { S.step = +el.dataset.step; S.editing = null; refreshCourse(['steps', 'step']); window.scrollTo({ top: 0, behavior: 'smooth' }); },
@@ -965,6 +1035,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   const t = e.target;
   if (t.id === 'file-in') { handleFiles(t.files); t.value = ''; return; }
+  if (t.id === 'imp-in') { importQuestions(t.files[0]); return; }
   if (t.dataset.bind === 'includeNotes') { S.includeNotes = t.checked; return; }
   if (t.dataset.bind === 'total') { t.value = S.plan.total; return; }
   if (t.dataset.lec) { updateLecture(t.closest('[data-id]').dataset.id, t.dataset.lec, t.value); return; }
@@ -1003,5 +1074,6 @@ window.addEventListener('beforeunload', e => { if (S.dirty || (S.gen && S.gen.ru
       else { S.authErr = e.message; }
     }
   }
+  try { S.regOpen = (await call('status')).registrationOpen === true; } catch (e) { S.regOpen = false; }
   S.view = 'auth'; render();
 })();

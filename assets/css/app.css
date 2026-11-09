@@ -227,7 +227,7 @@ a{color:var(--brand)}
 .drop p{color:var(--muted);font-size:14px;max-width:520px}
 .fmts{display:flex;gap:8px;margin-top:4px}
 .ft{display:inline-grid;place-items:center;height:22px;min-width:46px;padding:0 7px;border-radius:6px;font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.04em;direction:ltr}
-.ft-pptx{background:#FDE9DF;color:#B4552B}.ft-pdf{background:#FBE3E3;color:#A73A3A}.ft-docx{background:#E3ECFA;color:#2F5597}
+.ft-pptx{background:#FDE9DF;color:#B4552B}.ft-import{background:#EEF2F7;color:#33445A}.ft-pdf{background:#FBE3E3;color:#A73A3A}.ft-docx{background:#E3ECFA;color:#2F5597}
 .drop-opts{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:14px 2px 18px;flex-wrap:wrap}
 .queue{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
 .qi{display:grid;grid-template-columns:auto 1fr auto;gap:6px 12px;align-items:center;padding:12px 14px;border-radius:13px;background:var(--surface);border:1px solid var(--line);animation:rise .35s var(--ease)}
