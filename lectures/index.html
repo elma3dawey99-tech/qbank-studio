@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>محاضرات المواد · قسم تكنولوجيا الطوارئ والرعاية الحرجة</title>
+<title>محاضرات مواد قسم تكنولوجيا الطوارئ والرعاية الحرجة</title>
 <meta name="description" content="تجميع محاضرات مواد قسم تكنولوجيا الطوارئ والرعاية الحرجة — جامعة الدلتا.">
 <meta name="robots" content="noindex">
 <meta name="theme-color" content="#F4F6F9">
@@ -34,7 +34,7 @@ h1,h2,h3,p{margin:0}
 .top{background:var(--surface);border-bottom:1px solid var(--line)}
 .top-in{max-width:1040px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:12px}
 .top img{width:40px;height:40px}
-.top h1{font-size:18px;font-weight:700;color:var(--navy)}
+.top h1{font-size:18px;line-height:1.35;font-weight:700;color:var(--navy)}
 .top small{display:block;color:var(--muted);font-size:12.5px;line-height:1.3}
 main{max-width:1040px;margin:0 auto;padding:24px 20px 60px}
 
@@ -152,7 +152,7 @@ footer{text-align:center;color:var(--faint);font-size:12.5px;padding:0 20px 28px
 
 <header class="top"><div class="top-in">
   <img src="../assets/img/emblem.png" alt="">
-  <div><h1>محاضرات المواد</h1><small>قسم تكنولوجيا الطوارئ والرعاية الحرجة · جامعة الدلتا</small></div>
+  <div><h1>محاضرات مواد قسم تكنولوجيا الطوارئ والرعاية الحرجة</h1><small>كلية العلوم الصحية التطبيقية · جامعة الدلتا</small></div>
 </div></header>
 <main id="app"></main>
 <footer>تصميم: يوسف محروس المعداوي</footer>
@@ -247,7 +247,7 @@ function renderHome(q = '') {
   const keep = document.activeElement && document.activeElement.id === 'q';
   app.innerHTML = `
     <div class="head">
-      <div><h2>اختار المادة</h2><p>افتح المادة وارفع محاضراتها — الرقم جنب كل مادة هو عدد المحاضرات المحفوظة.</p></div>
+      <div><h2>اختار المادة</h2><p>افتح المادة وارفع محاضراتها.</p></div>
       <label class="search"><input id="q" type="search" placeholder="بحث باسم المادة أو الكود" value="${esc(q)}" aria-label="بحث">${ico('search')}</label>
     </div>
     ${loadError ? `<div class="banner">${esc(loadError)} <button class="btn sm" id="retry">جرّب تاني</button></div>` : ''}
