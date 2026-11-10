@@ -147,7 +147,7 @@ footer{text-align:center;color:var(--faint);font-size:12.5px;padding:0 20px 28px
 import { CATALOG } from '../assets/js/catalog.js';
 
 /* Where the files live: the Google Apps Script web app (owner's Google Drive). */
-const API_URL = '';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxTrGhTwRY81beuJFjAtN0oSpCsE5OGoZQfcXbGGDeyLwc2ugzUXadQ6qkBdv5GpcBR/exec';
 const params = new URLSearchParams(location.search);
 const LOCAL = ['localhost', '127.0.0.1'].includes(location.hostname);
 const ENDPOINT = (LOCAL && params.get('api')) || API_URL;      // ?api=... only honoured on localhost (testing)

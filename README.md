@@ -31,3 +31,9 @@
 - النشر: Deploy → Manage deployments → Edit → New version (بيحافظ على نفس الرابط).
 
 تصميم: يوسف محروس المعداوي
+
+## محاضرات المواد (`lectures/`)
+
+Lecture collection page: https://ecc-qbank.pages.dev/lectures/ — pick a course, upload its lectures (PowerPoint / PDF / Word), save, download all (as uploaded, or all as PDF).
+Open link, no accounts. Files live in the owner's Google Drive folder "محاضرات المواد - ECC" (one folder per course, PDF copies in a `PDF` sub-folder).
+Backend: separate Apps Script project "ECC Lectures - محاضرات المواد" (`lectures/backend/Code.gs`), deployed as a web app (execute as owner, access: anyone); its exec URL is `API_URL` in `lectures/index.html`.
